@@ -14,6 +14,7 @@ export interface AskResponse {
   question: string
   answer: string
   model: string
+  sessionId?: string
 }
 
 export interface ModelInfo {
@@ -25,6 +26,22 @@ export interface ModelInfo {
 
 export interface ModelsResponse {
   models: ModelInfo[]
+}
+
+export interface Session {
+  id: number
+  session_id: string
+  title: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Message {
+  id: number
+  session_id: string
+  message_type: 'user' | 'assistant'
+  content: string
+  created_at: string
 }
 
 export const healthCheck = async () => {
@@ -50,7 +67,8 @@ export const getModels = async (): Promise<ModelsResponse> => {
 export const askQuestionStream = async (
   question: string, 
   onChunk: (chunk: string) => void,
-  model?: string
+  model?: string,
+  sessionId?: string
 ): Promise<void> => {
   try {
     const response = await fetch(`${API_BASE_URL}/ask-stream`, {
@@ -60,7 +78,8 @@ export const askQuestionStream = async (
       },
       body: JSON.stringify({
         question,
-        model: model || 'gpt-oss:120b-cloud'
+        model: model || 'gpt-oss:120b-cloud',
+        sessionId
       })
     })
 
@@ -108,11 +127,12 @@ export const askQuestionStream = async (
   }
 }
 
-export const askQuestion = async (question: string, model?: string): Promise<AskResponse> => {
+export const askQuestion = async (question: string, model?: string, sessionId?: string): Promise<AskResponse> => {
   try {
     const response = await api.post('/ask', {
       question,
-      model: model || 'gpt-oss:120b-cloud'
+      model: model || 'gpt-oss:120b-cloud',
+      sessionId
     })
     return response.data
   } catch (error) {
@@ -121,6 +141,67 @@ export const askQuestion = async (question: string, model?: string): Promise<Ask
       const errorMessage = error.response?.data?.error || '网络请求失败'
       throw new Error(errorMessage)
     }
+    throw error
+  }
+}
+
+// 会话管理API
+export const getSessions = async (): Promise<Session[]> => {
+  try {
+    const response = await api.get('/sessions')
+    return response.data
+  } catch (error) {
+    console.error('获取会话列表失败:', error)
+    throw error
+  }
+}
+
+export const createSession = async (title?: string): Promise<Session> => {
+  try {
+    const response = await api.post('/sessions', { title })
+    return response.data
+  } catch (error) {
+    console.error('创建会话失败:', error)
+    throw error
+  }
+}
+
+export const getSession = async (sessionId: string): Promise<Session> => {
+  try {
+    const response = await api.get(`/sessions/${sessionId}`)
+    return response.data
+  } catch (error) {
+    console.error('获取会话失败:', error)
+    throw error
+  }
+}
+
+export const updateSessionTitle = async (sessionId: string, title: string): Promise<boolean> => {
+  try {
+    const response = await api.put(`/sessions/${sessionId}`, { title })
+    return response.data.success
+  } catch (error) {
+    console.error('更新会话标题失败:', error)
+    throw error
+  }
+}
+
+export const deleteSession = async (sessionId: string): Promise<boolean> => {
+  try {
+    const response = await api.delete(`/sessions/${sessionId}`)
+    return response.data.success
+  } catch (error) {
+    console.error('删除会话失败:', error)
+    throw error
+  }
+}
+
+export const getSessionMessages = async (sessionId: string): Promise<Message[]> => {
+  try {
+    const response = await api.get(`/sessions/${sessionId}/messages`)
+    return response.data
+  } catch (error) {
+    console.error('获取会话消息失败:', error)
     throw error
   }
 }

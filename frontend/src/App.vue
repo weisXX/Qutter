@@ -4,60 +4,61 @@ import { RouterView } from 'vue-router'
 
 <template>
   <div class="app-container">
-    <header class="app-header">
-      <h1>🤖 技术专家解答</h1>
-      <p>基于Ollama的智能技术问答系统</p>
-    </header>
-    <main class="app-main">
-      <RouterView />
-    </main>
+    <RouterView />
   </div>
 </template>
 
-<style scoped>
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  line-height: 1.6;
+  color: #2d3748;
+  background: #f7fafc;
+}
+
 .app-container {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #ffffff;
 }
 
-.app-header {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  padding: 2rem;
-  text-align: center;
-  color: white;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.app-header h1 {
-  margin: 0 0 0.5rem 0;
-  font-size: 2.5rem;
-  font-weight: 700;
-}
-
-.app-header p {
+#app {
+  max-width: none;
   margin: 0;
-  font-size: 1.1rem;
-  opacity: 0.9;
+  padding: 0;
+  font-weight: normal;
 }
 
-.app-main {
-  flex: 1;
-  padding: 2rem;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
+a,
+.green {
+  text-decoration: none;
+  color: #4299e1;
+  transition: 0.2s;
 }
 
-@media (max-width: 768px) {
-  .app-header h1 {
-    font-size: 2rem;
+@media (hover: hover) {
+  a:hover {
+    color: #3182ce;
   }
-  
-  .app-main {
-    padding: 1rem;
+}
+
+@media (min-width: 1024px) {
+  body {
+    display: block;
+    place-items: unset;
+  }
+
+  #app {
+    display: block;
+    grid-template-columns: none;
+    padding: 0;
   }
 }
 </style>

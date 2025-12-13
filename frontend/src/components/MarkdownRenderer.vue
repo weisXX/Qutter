@@ -6,6 +6,7 @@
 import { computed } from 'vue'
 import { marked } from 'marked'
 import hljs from 'highlight.js'
+import 'highlight.js/styles/github-dark.css'
 
 interface Props {
   content: string
@@ -37,7 +38,8 @@ const renderedContent = computed(() => {
 
 <style scoped>
 .markdown-content {
-  line-height: 1.6;
+  line-height: 1.3;
+  color: #1f2937;
 }
 
 .markdown-content :deep(h1),
@@ -46,71 +48,74 @@ const renderedContent = computed(() => {
 .markdown-content :deep(h4),
 .markdown-content :deep(h5),
 .markdown-content :deep(h6) {
-  margin: 1.5em 0 0.5em 0;
+  margin: 0.8em 0 0.3em 0;
   font-weight: 600;
-  color: #000000;
+  color: #1f2937;
 }
 
-.markdown-content :deep(h1) { font-size: 1.8em; }
-.markdown-content :deep(h2) { font-size: 1.5em; }
-.markdown-content :deep(h3) { font-size: 1.3em; }
+.markdown-content :deep(h1) { font-size: 1.6em; }
+.markdown-content :deep(h2) { font-size: 1.4em; }
+.markdown-content :deep(h3) { font-size: 1.2em; }
 .markdown-content :deep(h4) { font-size: 1.1em; }
 
 .markdown-content :deep(p) {
-  margin: 0.8em 0;
+  margin: 0.3em 0;
+  line-height: 1.3;
 }
 
 .markdown-content :deep(ul),
 .markdown-content :deep(ol) {
-  margin: 0.8em 0;
-  padding-left: 2em;
+  margin: 0.3em 0;
+  padding-left: 1.5em;
 }
 
 .markdown-content :deep(li) {
-  margin: 0.3em 0;
+  margin: 0.1em 0;
+  line-height: 1.3;
 }
 
 .markdown-content :deep(code) {
-  background-color: #f1f3f4;
-  padding: 0.2em 0.4em;
+  background-color: #f1f5f9;
+  padding: 0.1em 0.3em;
   border-radius: 3px;
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-  font-size: 0.9em;
-  color: #d73a49;
+  font-size: 0.85em;
+  color: #dc2626;
 }
 
 .markdown-content :deep(pre) {
-  background-color: #f6f8fa;
-  border: 1px solid #d0d7de;
-  border-radius: 6px;
-  padding: 16px;
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 12px;
   overflow-x: auto;
-  margin: 1em 0;
+  margin: 0.8em 0;
 }
 
 .markdown-content :deep(pre code) {
   background-color: transparent;
   padding: 0;
-  color: #24292f;
+  color: #e2e8f0;
   font-size: 0.85em;
+  line-height: 1.4;
 }
 
-/* 代码高亮样式 */
+/* 代码高亮样式 - 深色主题 */
 .markdown-content :deep(.hljs) {
-  background: #f6f8fa;
-  color: #24292f;
+  background: #1e293b;
+  color: #e2e8f0;
 }
 
 .markdown-content :deep(.hljs-comment),
 .markdown-content :deep(.hljs-quote) {
-  color: #6a737d;
+  color: #94a3b8;
   font-style: italic;
 }
 
 .markdown-content :deep(.hljs-keyword),
 .markdown-content :deep(.hljs-selector-tag),
 .markdown-content :deep(.hljs-subst) {
-  color: #d73a49;
+  color: #f472b6;
 }
 
 .markdown-content :deep(.hljs-number),
@@ -118,58 +123,60 @@ const renderedContent = computed(() => {
 .markdown-content :deep(.hljs-variable),
 .markdown-content :deep(.hljs-template-variable),
 .markdown-content :deep(.hljs-tag .hljs-attr) {
-  color: #005cc5;
+  color: #60a5fa;
 }
 
 .markdown-content :deep(.hljs-string),
 .markdown-content :deep(.hljs-doctag) {
-  color: #032f62;
+  color: #4ade80;
 }
 
 .markdown-content :deep(.hljs-title),
 .markdown-content :deep(.hljs-section),
 .markdown-content :deep(.hljs-selector-id) {
-  color: #6f42c1;
+  color: #a78bfa;
   font-weight: bold;
 }
 
 .markdown-content :deep(.hljs-type),
 .markdown-content :deep(.hljs-class .hljs-title) {
-  color: #6f42c1;
+  color: #a78bfa;
 }
 
 .markdown-content :deep(.hljs-tag),
 .markdown-content :deep(.hljs-name),
 .markdown-content :deep(.hljs-attribute) {
-  color: #22863a;
+  color: #34d399;
   font-weight: normal;
 }
 
 .markdown-content :deep(.hljs-regexp),
 .markdown-content :deep(.hljs-link) {
-  color: #e36209;
+  color: #fbbf24;
 }
 
 .markdown-content :deep(.hljs-symbol),
 .markdown-content :deep(.hljs-bullet) {
-  color: #005cc5;
+  color: #60a5fa;
 }
 
 .markdown-content :deep(.hljs-built_in),
 .markdown-content :deep(.hljs-builtin-name) {
-  color: #005cc5;
+  color: #60a5fa;
 }
 
 .markdown-content :deep(.hljs-meta) {
-  color: #22863a;
+  color: #34d399;
 }
 
 .markdown-content :deep(.hljs-deletion) {
-  background: #ffeef0;
+  background: #7f1d1d;
+  color: #fecaca;
 }
 
 .markdown-content :deep(.hljs-addition) {
-  background: #f0fff4;
+  background: #14532d;
+  color: #bbf7d0;
 }
 
 .markdown-content :deep(.hljs-emphasis) {
@@ -181,90 +188,53 @@ const renderedContent = computed(() => {
 }
 
 .markdown-content :deep(blockquote) {
-  border-left: 4px solid #dfe2e5;
-  padding: 0 16px;
-  margin: 0 0 16px 0;
-  color: #6a737d;
+  border-left: 4px solid #e2e8f0;
+  padding: 0 12px;
+  margin: 0.5em 0;
+  color: #64748b;
+  background: #f8fafc;
+  border-radius: 0 4px 4px 0;
 }
 
 .markdown-content :deep(table) {
   border-collapse: collapse;
   width: 100%;
-  margin: 1em 0;
+  margin: 0.8em 0;
 }
 
 .markdown-content :deep(th),
 .markdown-content :deep(td) {
-  border: 1px solid #d0d7de;
-  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  padding: 6px 10px;
   text-align: left;
 }
 
 .markdown-content :deep(th) {
-  background-color: #f6f8fa;
+  background-color: #f1f5f9;
   font-weight: 600;
+  color: #1e293b;
 }
 
 .markdown-content :deep(a) {
-  color: #0969da;
+  color: #3b82f6;
   text-decoration: none;
 }
 
 .markdown-content :deep(a:hover) {
   text-decoration: underline;
+  color: #2563eb;
 }
 
 .markdown-content :deep(hr) {
   border: none;
-  border-top: 1px solid #d0d7de;
-  margin: 2em 0;
+  border-top: 1px solid #e2e8f0;
+  margin: 1.5em 0;
 }
 
-/* 深色主题适配 */
-@media (prefers-color-scheme: dark) {
-  .markdown-content :deep(h1),
-  .markdown-content :deep(h2),
-  .markdown-content :deep(h3),
-  .markdown-content :deep(h4),
-  .markdown-content :deep(h5),
-  .markdown-content :deep(h6) {
-    color: #000000;
-  }
-
-  .markdown-content :deep(code) {
-    background-color: #2d333b;
-    color: #ff7b72;
-  }
-
-  .markdown-content :deep(pre) {
-    background-color: #161b22;
-    border-color: #30363d;
-  }
-
-  .markdown-content :deep(pre code) {
-    color: #e6edf3;
-  }
-
-  .markdown-content :deep(blockquote) {
-    border-left-color: #30363d;
-    color: #8b949e;
-  }
-
-  .markdown-content :deep(th),
-  .markdown-content :deep(td) {
-    border-color: #30363d;
-  }
-
-  .markdown-content :deep(th) {
-    background-color: #161b22;
-  }
-
-  .markdown-content :deep(a) {
-    color: #58a6ff;
-  }
-
-  .markdown-content :deep(hr) {
-    border-top-color: #30363d;
-  }
+.markdown-content :deep(img) {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  margin: 0.5em 0;
 }
 </style>

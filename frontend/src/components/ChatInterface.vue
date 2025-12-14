@@ -74,6 +74,32 @@
               <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
           </button>
+          <div class="renderer-selector">
+            <button 
+              class="header-button" 
+              :class="{ active: rendererType === 'marked' }"
+              @click="rendererType = 'marked'"
+              title="使用Marked渲染器"
+            >
+              Marked
+            </button>
+            <button 
+              class="header-button" 
+              :class="{ active: rendererType === 'markdown-it' }"
+              @click="rendererType = 'markdown-it'"
+              title="使用Markdown-it渲染器"
+            >
+              MD-it
+            </button>
+            <button 
+              class="header-button" 
+              :class="{ active: rendererType === 'comparison' }"
+              @click="rendererType = 'comparison'"
+              title="对比两种渲染器"
+            >
+              对比
+            </button>
+          </div>
           <button class="header-button" title="设置">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="3"></circle>
@@ -127,7 +153,10 @@
               <div class="user-message-bubble">{{ message.text }}</div>
             </div>
             <div class="message-text" v-else>
-              <MarkdownRenderer :content="message.text" />
+              <MarkedRenderer v-if="rendererType === 'marked'" :content="message.text" />
+              <MarkdownItRenderer v-else-if="rendererType === 'markdown-it'" :content="message.text" />
+              <MarkdownComparison v-else-if="rendererType === 'comparison'" :content="message.text" />
+              <MarkdownRenderer v-else :content="message.text" />
             </div>
           </div>
         </div>
@@ -193,6 +222,9 @@ import { askQuestionStream } from '@/services/api'
 import { ErrorHandler } from '@/utils/errorHandler'
 import { useSessionStore } from '@/stores/session'
 import MarkdownRenderer from './MarkdownRenderer.vue'
+import MarkedRenderer from './MarkedRenderer.vue'
+import MarkdownItRenderer from './MarkdownItRenderer.vue'
+import MarkdownComparison from './MarkdownComparison.vue'
 
 interface Message {
   type: 'user' | 'assistant'
@@ -209,6 +241,9 @@ const sessionStore = useSessionStore()
 
 // 会话列表显示状态
 const showSessionList = ref(false)
+
+// 渲染器类型选择
+const rendererType = ref<'marked' | 'markdown-it' | 'comparison'>('markdown-it')
 
 // 监听当前会话变化，加载历史消息
 watch(() => sessionStore.currentSessionId, async (newSessionId) => {
@@ -661,6 +696,31 @@ onMounted(async () => {
 .header-button:hover {
   background: #f3f4f6;
   color: #374151;
+}
+
+.header-button.active {
+  background: #3b82f6;
+  color: white;
+}
+
+.renderer-selector {
+  display: flex;
+  gap: 4px;
+  background: #f3f4f6;
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.renderer-selector .header-button {
+  font-size: 12px;
+  padding: 6px 8px;
+  min-width: auto;
+}
+
+.renderer-selector .header-button.active {
+  background: white;
+  color: #3b82f6;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .chat-container {

@@ -1,5 +1,5 @@
 <template>
-  <div class="markdown-content" v-html="renderedContent"></div>
+  <div class="markdownit-content" v-html="renderedContent"></div>
 </template>
 
 <script setup lang="ts">
@@ -136,73 +136,73 @@ const renderedContent = computed(() => {
 </script>
 
 <style scoped>
-.markdown-content {
+.markdownit-content {
   line-height: 1.6;
   color: #1f2937;
 }
 
-.markdown-content :deep(h1),
-.markdown-content :deep(h2),
-.markdown-content :deep(h3),
-.markdown-content :deep(h4),
-.markdown-content :deep(h5),
-.markdown-content :deep(h6) {
+.markdownit-content :deep(h1),
+.markdownit-content :deep(h2),
+.markdownit-content :deep(h3),
+.markdownit-content :deep(h4),
+.markdownit-content :deep(h5),
+.markdownit-content :deep(h6) {
   margin: 1em 0 0.5em 0;
   font-weight: 600;
   color: #1f2937;
   line-height: 1.3;
 }
 
-.markdown-content :deep(h1) { font-size: 1.8em; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.3em; }
-.markdown-content :deep(h2) { font-size: 1.5em; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3em; }
-.markdown-content :deep(h3) { font-size: 1.3em; }
-.markdown-content :deep(h4) { font-size: 1.2em; }
-.markdown-content :deep(h5) { font-size: 1.1em; }
-.markdown-content :deep(h6) { font-size: 1em; }
+.markdownit-content :deep(h1) { font-size: 1.8em; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.3em; }
+.markdownit-content :deep(h2) { font-size: 1.5em; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3em; }
+.markdownit-content :deep(h3) { font-size: 1.3em; }
+.markdownit-content :deep(h4) { font-size: 1.2em; }
+.markdownit-content :deep(h5) { font-size: 1.1em; }
+.markdownit-content :deep(h6) { font-size: 1em; }
 
-.markdown-content :deep(p) {
+.markdownit-content :deep(p) {
   margin: 0.8em 0;
   line-height: 1.6;
 }
 
-.markdown-content :deep(ul),
-.markdown-content :deep(ol) {
+.markdownit-content :deep(ul),
+.markdownit-content :deep(ol) {
   margin: 0.8em 0;
   padding-left: 2em;
 }
 
-.markdown-content :deep(ul) {
+.markdownit-content :deep(ul) {
   list-style-type: disc;
 }
 
-.markdown-content :deep(ol) {
+.markdownit-content :deep(ol) {
   list-style-type: decimal;
 }
 
-.markdown-content :deep(li) {
+.markdownit-content :deep(li) {
   margin: 0.3em 0;
   line-height: 1.6;
 }
 
 /* 嵌套列表样式 */
-.markdown-content :deep(ul ul),
-.markdown-content :deep(ol ol),
-.markdown-content :deep(ul ol),
-.markdown-content :deep(ol ul) {
+.markdownit-content :deep(ul ul),
+.markdownit-content :deep(ol ol),
+.markdownit-content :deep(ul ol),
+.markdownit-content :deep(ol ul) {
   margin: 0.3em 0;
   padding-left: 1.5em;
 }
 
-.markdown-content :deep(ul ul) {
+.markdownit-content :deep(ul ul) {
   list-style-type: circle;
 }
 
-.markdown-content :deep(ul ul ul) {
+.markdownit-content :deep(ul ul ul) {
   list-style-type: square;
 }
 
 /* 行内代码样式 */
-.markdown-content :deep(code:not(.hljs)) {
+.markdownit-content :deep(code:not(.hljs)) {
   background-color: #f1f5f9;
   padding: 0.2em 0.4em;
   border-radius: 4px;
@@ -212,7 +212,7 @@ const renderedContent = computed(() => {
 }
 
 /* 代码块样式 */
-.markdown-content :deep(pre) {
+.markdownit-content :deep(pre) {
   background-color: #f6f8fa;
   border: 1px solid #d0d7de;
   border-radius: 8px;
@@ -221,7 +221,7 @@ const renderedContent = computed(() => {
   margin: 1em 0;
 }
 
-.markdown-content :deep(pre code) {
+.markdownit-content :deep(pre code) {
   background-color: transparent;
   padding: 0;
   color: #1f2937;
@@ -231,7 +231,7 @@ const renderedContent = computed(() => {
 }
 
 /* 行内代码高亮样式 */
-.markdown-content :deep(code.hljs) {
+.markdownit-content :deep(code.hljs) {
   background-color: #f1f5f9;
   padding: 0.2em 0.4em;
   border-radius: 4px;
@@ -242,75 +242,75 @@ const renderedContent = computed(() => {
 }
 
 /* 代码高亮颜色 */
-.markdown-content :deep(code.hljs .hljs-comment),
-.markdown-content :deep(code.hljs .hljs-quote) {
+.markdownit-content :deep(code.hljs .hljs-comment),
+.markdownit-content :deep(code.hljs .hljs-quote) {
   color: #6b7280;
   font-style: italic;
 }
 
-.markdown-content :deep(code.hljs .hljs-keyword),
-.markdown-content :deep(code.hljs .hljs-selector-tag),
-.markdown-content :deep(code.hljs .hljs-subst) {
+.markdownit-content :deep(code.hljs .hljs-keyword),
+.markdownit-content :deep(code.hljs .hljs-selector-tag),
+.markdownit-content :deep(code.hljs .hljs-subst) {
   color: #0000ff;
   font-weight: bold;
 }
 
-.markdown-content :deep(code.hljs .hljs-number),
-.markdown-content :deep(code.hljs .hljs-literal) {
+.markdownit-content :deep(code.hljs .hljs-number),
+.markdownit-content :deep(code.hljs .hljs-literal) {
   color: #098658;
 }
 
-.markdown-content :deep(code.hljs .hljs-variable),
-.markdown-content :deep(code.hljs .hljs-template-variable) {
+.markdownit-content :deep(code.hljs .hljs-variable),
+.markdownit-content :deep(code.hljs .hljs-template-variable) {
   color: #001080;
 }
 
-.markdown-content :deep(code.hljs .hljs-string),
-.markdown-content :deep(code.hljs .hljs-doctag) {
+.markdownit-content :deep(code.hljs .hljs-string),
+.markdownit-content :deep(code.hljs .hljs-doctag) {
   color: #a31515;
 }
 
-.markdown-content :deep(code.hljs .hljs-title),
-.markdown-content :deep(code.hljs .hljs-section),
-.markdown-content :deep(code.hljs .hljs-selector-id) {
+.markdownit-content :deep(code.hljs .hljs-title),
+.markdownit-content :deep(code.hljs .hljs-section),
+.markdownit-content :deep(code.hljs .hljs-selector-id) {
   color: #7c3aed;
   font-weight: bold;
 }
 
-.markdown-content :deep(code.hljs .hljs-type),
-.markdown-content :deep(code.hljs .hljs-class .hljs-title) {
+.markdownit-content :deep(code.hljs .hljs-type),
+.markdownit-content :deep(code.hljs .hljs-class .hljs-title) {
   color: #267f99;
 }
 
-.markdown-content :deep(code.hljs .hljs-tag),
-.markdown-content :deep(code.hljs .hljs-name) {
+.markdownit-content :deep(code.hljs .hljs-tag),
+.markdownit-content :deep(code.hljs .hljs-name) {
   color: #800000;
 }
 
-.markdown-content :deep(code.hljs .hljs-attribute) {
+.markdownit-content :deep(code.hljs .hljs-attribute) {
   color: #0451a5;
 }
 
-.markdown-content :deep(code.hljs .hljs-function) {
+.markdownit-content :deep(code.hljs .hljs-function) {
   color: #795e26;
 }
 
-.markdown-content :deep(code.hljs .hljs-params) {
+.markdownit-content :deep(code.hljs .hljs-params) {
   color: #001080;
 }
 
 /* 任务列表样式 */
-.markdown-content :deep(.task-list-item) {
+.markdownit-content :deep(.task-list-item) {
   list-style: none;
   margin-left: -1.5em;
 }
 
-.markdown-content :deep(.task-list-item input) {
+.markdownit-content :deep(.task-list-item input) {
   margin-right: 0.5em;
 }
 
 /* 引用块样式 */
-.markdown-content :deep(blockquote) {
+.markdownit-content :deep(blockquote) {
   border-left: 4px solid #d0d7de;
   padding: 0 1em;
   margin: 1em 0;
@@ -319,54 +319,54 @@ const renderedContent = computed(() => {
   border-radius: 0 6px 6px 0;
 }
 
-.markdown-content :deep(blockquote p) {
+.markdownit-content :deep(blockquote p) {
   margin: 0.5em 0;
 }
 
 /* 表格样式 */
-.markdown-content :deep(table) {
+.markdownit-content :deep(table) {
   border-collapse: collapse;
   width: 100%;
   margin: 1em 0;
 }
 
-.markdown-content :deep(th),
-.markdown-content :deep(td) {
+.markdownit-content :deep(th),
+.markdownit-content :deep(td) {
   border: 1px solid #d0d7de;
   padding: 8px 12px;
   text-align: left;
 }
 
-.markdown-content :deep(th) {
+.markdownit-content :deep(th) {
   background-color: #f6f8fa;
   font-weight: 600;
   color: #1f2937;
 }
 
-.markdown-content :deep(tr:nth-child(even)) {
+.markdownit-content :deep(tr:nth-child(even)) {
   background-color: #f6f8fa;
 }
 
 /* 链接样式 */
-.markdown-content :deep(a) {
+.markdownit-content :deep(a) {
   color: #0969da;
   text-decoration: none;
 }
 
-.markdown-content :deep(a:hover) {
+.markdownit-content :deep(a:hover) {
   text-decoration: underline;
   color: #0550ae;
 }
 
 /* 水平线样式 */
-.markdown-content :deep(hr) {
+.markdownit-content :deep(hr) {
   border: none;
   border-top: 1px solid #d0d7de;
   margin: 2em 0;
 }
 
 /* 图片样式 */
-.markdown-content :deep(img) {
+.markdownit-content :deep(img) {
   max-width: 100%;
   height: auto;
   border-radius: 6px;
@@ -374,7 +374,7 @@ const renderedContent = computed(() => {
 }
 
 /* 目录样式 */
-.markdown-content :deep(.table-of-contents) {
+.markdownit-content :deep(.table-of-contents) {
   background: #f6f8fa;
   border: 1px solid #d0d7de;
   border-radius: 8px;
@@ -382,17 +382,17 @@ const renderedContent = computed(() => {
   margin: 1em 0;
 }
 
-.markdown-content :deep(.table-of-contents ul) {
+.markdownit-content :deep(.table-of-contents ul) {
   margin: 0;
   padding-left: 1.5em;
 }
 
-.markdown-content :deep(.table-of-contents li) {
+.markdownit-content :deep(.table-of-contents li) {
   margin: 0.2em 0;
 }
 
 /* 代码块深色主题覆盖 */
-.markdown-content :deep(.hljs) {
+.markdownit-content :deep(.hljs) {
   background: #f6f8fa !important;
   color: #1f2937 !important;
 }

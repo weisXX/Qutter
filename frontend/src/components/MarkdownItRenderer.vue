@@ -3,7 +3,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
@@ -80,6 +80,85 @@ md.renderer.rules.code_inline = (tokens, idx) => {
   }
 }
 
+// 自定义代码块渲染规则，添加工具栏
+md.renderer.rules.fence = (tokens, idx, options, env, renderer) => {
+  const token = tokens[idx]
+  const info = token.info ? md.utils.unescapeAll(token.info).trim() : ''
+  const langName = info ? info.split(/\s+/g)[0] : ''
+  
+  let highlighted = token.content
+  if (langName && hljs.getLanguage(langName)) {
+    try {
+      highlighted = hljs.highlight(token.content, { language: langName }).value
+    } catch (err) {
+      console.warn('代码高亮失败:', err)
+    }
+  }
+  
+  const codeId = `code-block-${Date.now()}-${idx}`
+  const toolbar = `
+    <div class="code-toolbar">
+      <div class="code-language">${langName || 'text'}</div>
+      <div class="code-actions">
+        <button class="code-action-btn" data-action="copy" data-code-id="${codeId}" title="复制代码">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          <span>复制</span>
+        </button>
+        <button class="code-action-btn" data-action="download" data-code-id="${codeId}" data-language="${langName || 'code'}" title="下载代码">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span>下载</span>
+        </button>
+      </div>
+    </div>
+  `
+  
+  return `
+    <div class="code-block-container">
+      ${toolbar}
+      <pre class="hljs"><code id="${codeId}" class="hljs language-${langName}">${highlighted}</code></pre>
+    </div>
+  `
+}
+
+// 自定义列表项渲染规则，确保列表项内容不换行
+md.renderer.rules.list_item_open = (tokens, idx) => {
+  return '<li>'
+}
+
+md.renderer.rules.list_item_close = (tokens, idx) => {
+  return '</li>'
+}
+
+// 自定义段落渲染规则，在列表项中的段落不换行
+md.renderer.rules.paragraph_open = (tokens, idx, options, env, renderer) => {
+  // 检查是否在列表项中
+  const parentTokens = tokens.slice(0, idx).reverse()
+  const isInListItem = parentTokens.some(token => token.type === 'list_item_open')
+  
+  if (isInListItem) {
+    return '<span style="display: inline;">'
+  }
+  return '<p>'
+}
+
+md.renderer.rules.paragraph_close = (tokens, idx, options, env, renderer) => {
+  // 检查是否在列表项中
+  const parentTokens = tokens.slice(0, idx).reverse()
+  const isInListItem = parentTokens.some(token => token.type === 'list_item_open')
+  
+  if (isInListItem) {
+    return '</span>'
+  }
+  return '</p>'
+}
+
 // 简单的语言检测函数
 function detectLanguage(code: string): string | null {
   // JavaScript 检测
@@ -133,6 +212,96 @@ const renderedContent = computed(() => {
   
   return md.render(content)
 })
+
+// 事件处理函数
+const handleCodeAction = (event: Event) => {
+  const target = event.target as HTMLElement
+  const button = target.closest('.code-action-btn') as HTMLButtonElement
+  
+  if (button) {
+    const action = button.dataset.action
+    const codeId = button.dataset.codeId
+    const language = button.dataset.language
+    
+    if (action === 'copy' && codeId) {
+      const codeElement = document.getElementById(codeId)
+      if (codeElement) {
+        const text = codeElement.textContent || ''
+        navigator.clipboard.writeText(text).then(() => {
+          console.log('代码已复制到剪贴板')
+        }).catch(err => {
+          console.error('复制失败:', err)
+        })
+      }
+    } else if (action === 'download' && codeId && language) {
+      const codeElement = document.getElementById(codeId)
+      if (codeElement) {
+        const text = codeElement.textContent || ''
+        const blob = new Blob([text], { type: 'text/plain' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `code.${getFileExtension(language)}`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+      }
+    }
+  }
+}
+
+// 生命周期钩子
+onMounted(() => {
+  document.addEventListener('click', handleCodeAction)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleCodeAction)
+})
+
+// 文件扩展名映射
+const getFileExtension = (language: string): string => {
+  const extensions: Record<string, string> = {
+    'javascript': 'js',
+    'typescript': 'ts',
+    'python': 'py',
+    'java': 'java',
+    'cpp': 'cpp',
+    'c': 'c',
+    'csharp': 'cs',
+    'php': 'php',
+    'ruby': 'rb',
+    'go': 'go',
+    'rust': 'rs',
+    'swift': 'swift',
+    'kotlin': 'kt',
+    'scala': 'scala',
+    'html': 'html',
+    'css': 'css',
+    'scss': 'scss',
+    'sass': 'sass',
+    'less': 'less',
+    'json': 'json',
+    'xml': 'xml',
+    'yaml': 'yaml',
+    'yml': 'yml',
+    'toml': 'toml',
+    'sql': 'sql',
+    'bash': 'sh',
+    'shell': 'sh',
+    'powershell': 'ps1',
+    'dockerfile': 'dockerfile',
+    'markdown': 'md',
+    'tex': 'tex',
+    'r': 'r',
+    'matlab': 'm',
+    'lua': 'lua',
+    'perl': 'pl',
+    'dart': 'dart'
+  }
+  return extensions[language.toLowerCase()] || 'txt'
+}
 </script>
 
 <style scoped>
@@ -184,6 +353,16 @@ const renderedContent = computed(() => {
   line-height: 1.6;
 }
 
+.markdownit-content :deep(li p:first-child) {
+  display: inline;
+  margin: 0;
+}
+
+.markdownit-content :deep(li p:not(:first-child)) {
+  display: block;
+  margin: 0.5em 0;
+}
+
 /* 嵌套列表样式 */
 .markdownit-content :deep(ul ul),
 .markdownit-content :deep(ol ol),
@@ -211,14 +390,79 @@ const renderedContent = computed(() => {
   color: #1f2937;
 }
 
+/* 代码块容器样式 */
+.markdownit-content :deep(.code-block-container) {
+  margin: 1em 0;
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f6f8fa;
+}
+
+/* 代码块工具栏样式 */
+.markdownit-content :deep(.code-toolbar) {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 12px;
+  background: #f1f3f4;
+  border-bottom: 1px solid #d0d7de;
+  font-size: 11px;
+  height: 28px;
+}
+
+.markdownit-content :deep(.code-language) {
+  color: #57606a;
+  font-weight: 500;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+
+.markdownit-content :deep(.code-actions) {
+  display: flex;
+  gap: 4px;
+}
+
+.markdownit-content :deep(.code-action-btn) {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px;
+  border: 1px solid #d0d7de;
+  border-radius: 3px;
+  background: white;
+  color: #57606a;
+  font-size: 9px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  height: 20px;
+  min-width: 0;
+}
+
+.markdownit-content :deep(.code-action-btn:hover) {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+  color: #24292f;
+}
+
+.markdownit-content :deep(.code-action-btn svg) {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+}
+
+.markdownit-content :deep(.code-action-btn span) {
+  display: none;
+}
+
 /* 代码块样式 */
 .markdownit-content :deep(pre) {
   background-color: #f6f8fa;
-  border: 1px solid #d0d7de;
-  border-radius: 8px;
+  border: none;
+  border-radius: 0;
   padding: 16px;
   overflow-x: auto;
-  margin: 1em 0;
+  margin: 0;
 }
 
 .markdownit-content :deep(pre code) {
@@ -362,7 +606,7 @@ const renderedContent = computed(() => {
 .markdownit-content :deep(hr) {
   border: none;
   border-top: 1px solid #d0d7de;
-  margin: 2em 0;
+  margin: 1em 0;
 }
 
 /* 图片样式 */

@@ -74,7 +74,10 @@
               <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
           </button>
-          <div class="renderer-selector">
+          
+          
+          
+          <div class="renderer-selector" style="display: none;">
             <button 
               class="header-button" 
               :class="{ active: rendererType === 'marked' }"
@@ -110,6 +113,51 @@
       </header>
 
     <div class="chat-container">
+        <!-- 右侧浮动的问题导航气泡 -->
+        <div 
+          class="floating-questions-nav"
+          :style="{ top: navPosition + '%' }"
+        >
+          <button 
+            class="questions-nav-button"
+            @mouseenter="showQuestionsList = true"
+            @mousedown="handleMouseDown"
+            :class="{ dragging: isDragging }"
+            title="查看问题列表（可拖动调整位置）"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <line x1="3" y1="12" x2="21" y2="12"></line>
+              <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+            <span class="questions-count">{{ getUserQuestions().length }}</span>
+          </button>
+          
+          <!-- 问题列表弹窗 -->
+          <div 
+            v-if="showQuestionsList"
+            class="questions-popup"
+            @mouseenter="showQuestionsList = true"
+            @mouseleave="showQuestionsList = false"
+          >
+            <div class="questions-popup-header">
+              <span>问题列表</span>
+              <span class="questions-count">{{ getUserQuestions().length }} 个问题</span>
+            </div>
+            <div class="questions-list">
+              <div 
+                v-for="(question, index) in getUserQuestions()" 
+                :key="question.id"
+                class="question-item"
+                @click="scrollToQuestion(question.index)"
+              >
+                <span class="question-number">{{ index + 1 }}</span>
+                <span class="question-text">{{ question.text }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="chat-messages" ref="messagesContainer">
         <div v-if="messages.length === 0" class="welcome-screen">
           <div class="welcome-content">
@@ -157,6 +205,21 @@
               <MarkdownItRenderer v-else-if="rendererType === 'markdown-it'" :content="message.text" />
               <MarkdownComparison v-else-if="rendererType === 'comparison'" :content="message.text" />
               <MarkdownRenderer v-else :content="message.text" />
+              
+              <!-- 助手消息工具栏 -->
+              <div class="message-toolbar">
+                <button 
+                  class="toolbar-button"
+                  @click="copyMessage(message.text)"
+                  title="复制消息"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                  <span>复制</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -169,7 +232,7 @@
           <div class="input-container">
             <textarea
               v-model="currentMessage"
-              @keydown.enter.prevent="handleEnterKey"
+              @keydown="handleEnterKey"
               placeholder="输入消息..."
               rows="1"
               :disabled="isLoading"
@@ -177,14 +240,22 @@
               ref="messageInput"
             ></textarea>
             <div class="input-actions">
-              <button class="action-button" title="附件">
+              <input
+                ref="fileInputRef"
+                type="file"
+                multiple
+                @change="handleFileSelect"
+                style="display: none"
+                accept=".txt,.md,.json,.csv,.pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.svg"
+              />
+              <button class="action-button" title="附件" @click="fileInputRef?.click()">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
                 </svg>
               </button>
               <button
                 @click="sendMessage"
-                :disabled="isLoading || !currentMessage.trim()"
+                :disabled="isLoading || (!currentMessage.trim() && attachedFiles.length === 0)"
                 class="send-button"
                 title="发送消息 (Enter)"
               >
@@ -198,7 +269,30 @@
               </button>
             </div>
           </div>
-          <div class="input-info">
+          <!-- 附件预览区域 -->
+        <div v-if="attachedFiles.length > 0" class="attached-files">
+          <div class="files-header">
+            <span>附件 ({{ attachedFiles.length }})</span>
+            <button class="clear-files" @click="clearFiles">清除全部</button>
+          </div>
+          <div class="files-list">
+            <div v-for="(file, index) in attachedFiles" :key="index" class="file-item">
+              <div class="file-info">
+                <span class="file-icon">{{ getFileIcon(file.name) }}</span>
+                <span class="file-name">{{ file.name }}</span>
+                <span class="file-size">{{ formatFileSize(file.size) }}</span>
+              </div>
+              <button class="remove-file" @click="removeFile(index)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <div class="input-info">
           <span class="input-hint">Enter 发送，Shift + Enter 换行</span>
           <div v-if="isLoading" class="global-loading">
             <div class="loading-dots">
@@ -239,6 +333,24 @@ const messagesContainer = ref<HTMLElement>()
 const messageInput = ref<HTMLTextAreaElement>()
 const sessionStore = useSessionStore()
 
+// 附件相关状态
+const attachedFiles = ref<File[]>([])
+const fileInputRef = ref<HTMLInputElement>()
+
+// 问题导航相关状态
+const showQuestionsList = ref(false)
+const questionsListPosition = ref({ x: 0, y: 0 })
+const isDragging = ref(false)
+const dragStartY = ref(0)
+const navPosition = ref(50) // 百分比位置
+
+// 监听输入内容变化，自动调整高度
+watch(currentMessage, () => {
+  nextTick(() => {
+    adjustTextareaHeight()
+  })
+})
+
 // 会话列表显示状态
 const showSessionList = ref(false)
 
@@ -254,7 +366,7 @@ watch(() => sessionStore.currentSessionId, async (newSessionId) => {
       text: msg.content,
       timestamp: new Date(msg.created_at)
     }))
-    scrollToBottom()
+    nextTick(() => scrollToBottom())
   } else {
     messages.value = []
   }
@@ -268,7 +380,7 @@ watch(() => sessionStore.currentMessages, (newMessages) => {
       text: msg.content,
       timestamp: new Date(msg.created_at)
     }))
-    scrollToBottom()
+    nextTick(() => scrollToBottom())
   }
 }, { deep: true })
 
@@ -280,31 +392,46 @@ const suggestedPrompts = ref([
 ])
 
 const scrollToBottom = () => {
-  nextTick(() => {
-    if (messagesContainer.value) {
-      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
-    }
-  })
+  if (messagesContainer.value) {
+    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+  }
 }
 
 
 
 const handleEnterKey = (event: KeyboardEvent) => {
-  if (event.shiftKey) {
-    // 允许换行
+  // 只处理Enter键
+  if (event.key !== 'Enter') {
     return
   }
+  
+  if (event.shiftKey) {
+    // 允许换行，不阻止默认行为
+    return
+  }
+  
+  // 阻止默认换行行为并发送消息
   event.preventDefault()
   sendMessage()
 }
 
 const sendMessage = async () => {
-  if (!currentMessage.value.trim() || isLoading.value) return
+  if ((!currentMessage.value.trim() && attachedFiles.value.length === 0) || isLoading.value) return
 
-  // 如果没有当前会话，创建一个新会话
-  if (!sessionStore.currentSessionId) {
+  // 构建用户消息文本，包含附件信息
+  let messageText = currentMessage.value.trim()
+  if (attachedFiles.value.length > 0) {
+    const fileNames = attachedFiles.value.map(file => file.name).join(', ')
+    messageText = messageText ? `${messageText}\n\n附件: ${fileNames}` : `附件: ${fileNames}`
+  }
+
+  // 判断是否需要创建新会话
+  const isNewSession = !sessionStore.currentSessionId
+  
+  // 如果没有当前会话，创建一个新会话并传入第一条消息作为标题
+  if (isNewSession) {
     try {
-      await sessionStore.createNewSession()
+      await sessionStore.createNewSession(undefined, messageText)
     } catch (error) {
       console.error('创建会话失败:', error)
       return
@@ -313,13 +440,14 @@ const sendMessage = async () => {
 
   const userMessage: Message = {
     type: 'user',
-    text: currentMessage.value.trim(),
+    text: messageText,
     timestamp: new Date()
   }
 
   messages.value.push(userMessage)
   const question = currentMessage.value.trim()
   currentMessage.value = ''
+  attachedFiles.value = []
   isLoading.value = true
   scrollToBottom()
 
@@ -404,6 +532,53 @@ const usePrompt = (prompt: string) => {
   }
 }
 
+// 附件相关函数
+const handleFileSelect = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  if (target.files) {
+    attachedFiles.value = [...attachedFiles.value, ...Array.from(target.files)]
+  }
+  // 清空input值，以便可以重复选择同一个文件
+  target.value = ''
+}
+
+const removeFile = (index: number) => {
+  attachedFiles.value.splice(index, 1)
+}
+
+const clearFiles = () => {
+  attachedFiles.value = []
+}
+
+const getFileIcon = (fileName: string): string => {
+  const ext = fileName.split('.').pop()?.toLowerCase()
+  const iconMap: Record<string, string> = {
+    'txt': '📄',
+    'md': '📝',
+    'json': '📋',
+    'csv': '📊',
+    'pdf': '📕',
+    'doc': '📘',
+    'docx': '📘',
+    'xls': '📗',
+    'xlsx': '📗',
+    'png': '🖼️',
+    'jpg': '🖼️',
+    'jpeg': '🖼️',
+    'gif': '🖼️',
+    'svg': '🎨'
+  }
+  return iconMap[ext || ''] || '📎'
+}
+
+const formatFileSize = (bytes: number): string => {
+  if (bytes === 0) return '0 Bytes'
+  const k = 1024
+  const sizes = ['Bytes', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
 // 自动调整输入框高度
 const adjustTextareaHeight = () => {
   if (messageInput.value) {
@@ -430,6 +605,97 @@ const formatDate = (dateString: string) => {
       day: 'numeric'
     })
   }
+}
+
+// 复制消息功能
+const copyMessage = async (text: string) => {
+  try {
+    await navigator.clipboard.writeText(text)
+    // 可以添加一个临时提示，这里暂时用console
+    console.log('消息已复制到剪贴板')
+  } catch (err) {
+    console.error('复制失败:', err)
+    // 降级方案：创建临时文本区域
+    const textArea = document.createElement('textarea')
+    textArea.value = text
+    document.body.appendChild(textArea)
+    textArea.select()
+    try {
+      document.execCommand('copy')
+      console.log('消息已复制到剪贴板')
+    } catch (fallbackErr) {
+      console.error('复制失败:', fallbackErr)
+    }
+    document.body.removeChild(textArea)
+  }
+}
+
+// 获取当前会话的所有用户问题
+const getUserQuestions = () => {
+  return messages.value
+    .filter(msg => msg.type === 'user')
+    .map((msg, index) => ({
+      id: `question-${index}`,
+      text: msg.text,
+      index: index
+    }))
+}
+
+// 显示问题列表
+const showQuestionsPopup = (event: MouseEvent) => {
+  const rect = (event.target as HTMLElement).getBoundingClientRect()
+  questionsListPosition.value = {
+    x: rect.left - 200, // 显示在气泡左侧
+    y: rect.top
+  }
+  showQuestionsList.value = true
+}
+
+// 滚动到指定问题
+const scrollToQuestion = (messageIndex: number) => {
+  showQuestionsList.value = false
+  const messageElements = document.querySelectorAll('.message.user')
+  if (messageElements[messageIndex]) {
+    messageElements[messageIndex].scrollIntoView({
+      behavior: 'smooth',
+      block: 'center'
+    })
+    
+    // 添加高亮效果
+    const element = messageElements[messageIndex] as HTMLElement
+    element.style.transition = 'background-color 0.3s ease'
+    element.style.backgroundColor = '#fef3c7'
+    setTimeout(() => {
+      element.style.backgroundColor = ''
+    }, 2000)
+  }
+}
+
+// 拖动相关函数
+const handleMouseDown = (event: MouseEvent) => {
+  isDragging.value = true
+  dragStartY.value = event.clientY - (navPosition.value * window.innerHeight / 100)
+  document.addEventListener('mousemove', handleMouseMove)
+  document.addEventListener('mouseup', handleMouseUp)
+  event.preventDefault()
+}
+
+const handleMouseMove = (event: MouseEvent) => {
+  if (!isDragging.value) return
+  
+  const newY = event.clientY - dragStartY.value
+  const percentage = (newY / window.innerHeight) * 100
+  
+  // 限制在屏幕范围内
+  if (percentage >= 10 && percentage <= 90) {
+    navPosition.value = percentage
+  }
+}
+
+const handleMouseUp = () => {
+  isDragging.value = false
+  document.removeEventListener('mousemove', handleMouseMove)
+  document.removeEventListener('mouseup', handleMouseUp)
 }
 
 onMounted(async () => {
@@ -860,12 +1126,203 @@ onMounted(async () => {
   background: #3b82f6;
   color: white;
   padding: 12px 16px;
-  border-radius: 18px 18px 4px 18px;
-  display: inline-block;
-  max-width: 100%;
+  border-radius: 18px 0 18px 18px;
+  /* display: inline-block; */
+  max-width: calc(100% - 88px);
   word-wrap: break-word;
   float: right;
   clear: both;
+}
+
+/* 消息工具栏样式 */
+.message-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid #f3f4f6;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.message:hover .message-toolbar {
+  opacity: 1;
+}
+
+.toolbar-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: white;
+  color: #6b7280;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.toolbar-button:hover {
+  border-color: #d1d5db;
+  background: #f9fafb;
+  color: #374151;
+}
+
+.toolbar-button svg {
+  flex-shrink: 0;
+}
+
+/* 右侧浮动问题导航样式 */
+.floating-questions-nav {
+  position: fixed;
+  right: 20px;
+  z-index: 100;
+  transition: top 0.1s ease;
+}
+
+.questions-nav-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  padding: 4px;
+}
+
+.questions-nav-button:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.questions-nav-button.dragging {
+  cursor: grabbing;
+  background: #f3f4f6;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.questions-count {
+  font-size: 10px;
+  font-weight: 600;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.questions-popup {
+  position: absolute;
+  width: 300px;
+  max-height: 400px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  overflow: hidden;
+  right: 40px;
+  top: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.floating-questions-nav:hover .questions-popup {
+  opacity: 1;
+  visibility: visible;
+}
+
+.questions-popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.questions-count {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: normal;
+}
+
+.questions-list {
+  max-height: 350px;
+  overflow-y: auto;
+}
+
+.question-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.question-item:hover {
+  background: #f9fafb;
+}
+
+.question-item:last-child {
+  border-bottom: none;
+}
+
+.question-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  background: #e5e7eb;
+  color: #6b7280;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.question-text {
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.4;
+  word-break: break-word;
+  flex: 1;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 问题列表滚动条样式 */
+.questions-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.questions-list::-webkit-scrollbar-track {
+  background: #f9fafb;
+}
+
+.questions-list::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+.questions-list::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
 }
 
 
@@ -944,6 +1401,7 @@ onMounted(async () => {
   min-height: 24px;
   max-height: 120px;
   overflow-y: auto;
+  transition: height 0.2s ease;
 }
 
 .message-input::placeholder {
@@ -1067,34 +1525,153 @@ onMounted(async () => {
 }
 
 /* 滚动条样式 */
+.chat-messages {
+  scrollbar-width: thin;
+  scrollbar-color: #e5e7eb transparent;
+}
+
 .chat-messages::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
+  display: block;
 }
 
 .chat-messages::-webkit-scrollbar-track {
-  background: transparent;
+  background: #f9fafb;
+  border-radius: 4px;
 }
 
 .chat-messages::-webkit-scrollbar-thumb {
-  background: #e5e7eb;
-  border-radius: 3px;
+  background: #d1d5db;
+  border-radius: 4px;
+  border: 1px solid #e5e7eb;
 }
 
 .chat-messages::-webkit-scrollbar-thumb:hover {
-  background: #d1d5db;
+  background: #9ca3af;
+}
+
+.chat-messages::-webkit-scrollbar-corner {
+  background: #f9fafb;
+}
+
+.message-input {
+  scrollbar-width: thin;
+  scrollbar-color: #e5e7eb transparent;
 }
 
 .message-input::-webkit-scrollbar {
-  width: 4px;
+  width: 6px;
+  display: block;
 }
 
 .message-input::-webkit-scrollbar-track {
-  background: transparent;
+  background: #f9fafb;
+  border-radius: 3px;
 }
 
 .message-input::-webkit-scrollbar-thumb {
-  background: #e5e7eb;
-  border-radius: 2px;
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+.message-input::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* 附件样式 */
+.attached-files {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.files-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.clear-files {
+  background: transparent;
+  border: none;
+  color: #ef4444;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.clear-files:hover {
+  background: #fee2e2;
+}
+
+.files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.file-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.file-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.file-name {
+  font-size: 14px;
+  color: #1f2937;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.file-size {
+  font-size: 12px;
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.remove-file {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.remove-file:hover {
+  background: #ef4444;
+  color: white;
 }
 
 /* 响应式设计 */

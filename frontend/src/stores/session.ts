@@ -53,13 +53,28 @@ export const useSessionStore = defineStore('session', () => {
     }
   }
 
-  const createNewSession = async (title?: string) => {
+  const createNewSession = async (title?: string, firstMessage?: string) => {
     try {
       isLoading.value = true
       const newSession = await createSession(title)
       sessions.value.unshift(newSession)
       currentSessionId.value = newSession.session_id
       currentMessages.value = []
+      
+      // 如果提供了第一条消息，更新会话标题
+      if (firstMessage && !title) {
+        const sessionTitle = firstMessage.length > 30 
+          ? firstMessage.substring(0, 30) + '...' 
+          : firstMessage
+        await updateTitle(newSession.session_id, sessionTitle)
+        
+        // 更新本地会话标题
+        const session = sessions.value.find(s => s.session_id === newSession.session_id)
+        if (session) {
+          session.title = sessionTitle
+        }
+      }
+      
       return newSession
     } catch (error) {
       console.error('创建新会话失败:', error)

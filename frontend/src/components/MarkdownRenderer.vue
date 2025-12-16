@@ -9,6 +9,9 @@ import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 import markdownItTaskLists from 'markdown-it-task-lists'
 import markdownItTOC from 'markdown-it-table-of-contents'
+import markdownItTexmath from 'markdown-it-texmath'
+import katex from 'katex'
+import 'katex/dist/katex.min.css'
 
 interface Props {
   content: string
@@ -53,8 +56,51 @@ md.use(markdownItTOC, {
   }
 })
 
+// 添加数学公式支持
+md.use(markdownItTexmath, {
+  engine: katex,
+  delimiters: ['dollars', 'brackets'],
+  katexOptions: {
+    throwOnError: false,
+    errorColor: '#cc0000',
+    strict: false
+  }
+})
+
+// 自定义列表项渲染规则，确保列表项内容不换行
+md.renderer.rules.list_item_open = (tokens: any, idx: number) => {
+  return '<li>'
+}
+
+md.renderer.rules.list_item_close = (tokens: any, idx: number) => {
+  return '</li>'
+}
+
+// 自定义段落渲染规则，在列表项中的段落不换行
+md.renderer.rules.paragraph_open = (tokens: any, idx: number, options: any, env: any, renderer: any): string => {
+  // 检查是否在列表项中
+  const parentTokens = tokens.slice(0, idx).reverse()
+  const isInListItem = parentTokens.some((token: any) => token.type === 'list_item_open')
+  
+  if (isInListItem) {
+    return '<span style="display: inline;">'
+  }
+  return '<p>'
+}
+
+md.renderer.rules.paragraph_close = (tokens: any, idx: number, options: any, env: any, renderer: any): string => {
+  // 检查是否在列表项中
+  const parentTokens = tokens.slice(0, idx).reverse()
+  const isInListItem = parentTokens.some((token: any) => token.type === 'list_item_open')
+  
+  if (isInListItem) {
+    return '</span>'
+  }
+  return '</p>'
+}
+
 // 自定义渲染规则，处理行内代码
-md.renderer.rules.code_inline = (tokens, idx) => {
+md.renderer.rules.code_inline = (tokens: any, idx: number) => {
   const token = tokens[idx]
   const code = token.content
   
@@ -123,13 +169,31 @@ function detectLanguage(code: string): string | null {
 const renderedContent = computed(() => {
   if (!props.content) return ''
   
-  // 处理HTML实体解码
+  // 预处理内容，处理HTML标签和数学公式
   let content = props.content
+    // 处理HTML实体解码
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
+    .replace(/&#39;/g, "'")
+    // 移除可能干扰数学公式的HTML标签
+    .replace(/<br[^>]*>/g, ' ') // 将<br>替换为空格
+    .replace(/<br\s*\/>/g, ' ') // 处理自闭合<br/>
+    .replace(/&nbsp;/g, ' ') // 替换不间断空格
+    // 处理数学公式中的特殊字符
+    .replace(/\\cdotp/g, '/')
+    // 临时保护数学公式中的特殊符号
+    .replace(/\$(.*?)\$/g, (match, formula) => {
+      // 移除公式内的HTML标签
+      const cleanFormula = formula.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ')
+      return `$${cleanFormula}$`
+    })
+    .replace(/\$\$(.*?)\$\$/g, (match, formula) => {
+      // 移除公式内的HTML标签
+      const cleanFormula = formula.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ')
+      return `$$${cleanFormula}$$`
+    })
   
   return md.render(content)
 })
@@ -141,6 +205,7 @@ const renderedContent = computed(() => {
   color: #1f2937;
 }
 
+/* 继承原有的 Markdown 样式 */
 .markdown-content :deep(h1),
 .markdown-content :deep(h2),
 .markdown-content :deep(h3),
@@ -241,64 +306,6 @@ const renderedContent = computed(() => {
   display: inline;
 }
 
-/* 代码高亮颜色 */
-.markdown-content :deep(code.hljs .hljs-comment),
-.markdown-content :deep(code.hljs .hljs-quote) {
-  color: #6b7280;
-  font-style: italic;
-}
-
-.markdown-content :deep(code.hljs .hljs-keyword),
-.markdown-content :deep(code.hljs .hljs-selector-tag),
-.markdown-content :deep(code.hljs .hljs-subst) {
-  color: #0000ff;
-  font-weight: bold;
-}
-
-.markdown-content :deep(code.hljs .hljs-number),
-.markdown-content :deep(code.hljs .hljs-literal) {
-  color: #098658;
-}
-
-.markdown-content :deep(code.hljs .hljs-variable),
-.markdown-content :deep(code.hljs .hljs-template-variable) {
-  color: #001080;
-}
-
-.markdown-content :deep(code.hljs .hljs-string),
-.markdown-content :deep(code.hljs .hljs-doctag) {
-  color: #a31515;
-}
-
-.markdown-content :deep(code.hljs .hljs-title),
-.markdown-content :deep(code.hljs .hljs-section),
-.markdown-content :deep(code.hljs .hljs-selector-id) {
-  color: #7c3aed;
-  font-weight: bold;
-}
-
-.markdown-content :deep(code.hljs .hljs-type),
-.markdown-content :deep(code.hljs .hljs-class .hljs-title) {
-  color: #267f99;
-}
-
-.markdown-content :deep(code.hljs .hljs-tag),
-.markdown-content :deep(code.hljs .hljs-name) {
-  color: #800000;
-}
-
-.markdown-content :deep(code.hljs .hljs-attribute) {
-  color: #0451a5;
-}
-
-.markdown-content :deep(code.hljs .hljs-function) {
-  color: #795e26;
-}
-
-.markdown-content :deep(code.hljs .hljs-params) {
-  color: #001080;
-}
-
 /* 任务列表样式 */
 .markdown-content :deep(.task-list-item) {
   list-style: none;
@@ -395,5 +402,19 @@ const renderedContent = computed(() => {
 .markdown-content :deep(.hljs) {
   background: #f6f8fa !important;
   color: #1f2937 !important;
+}
+
+/* 数学公式样式 */
+.markdown-content :deep(.katex) {
+  font-size: 1.1em;
+}
+
+.markdown-content :deep(.katex-display) {
+  margin: 1em 0;
+  text-align: center;
+}
+
+.markdown-content :deep(.katex-error) {
+  color: #ff4757;
 }
 </style>

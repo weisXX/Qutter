@@ -102,6 +102,14 @@
             >
               对比
             </button>
+            <button 
+              class="header-button" 
+              :class="{ active: rendererType === 'enhanced' }"
+              @click="rendererType = 'enhanced'"
+              title="支持图表的增强渲染器"
+            >
+              图表
+            </button>
           </div>
           <button class="header-button" title="设置">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -158,7 +166,7 @@
           </div>
         </div>
 
-        <div class="chat-messages" ref="messagesContainer">
+        <div class="chat-messages" ref="messagesContainer" @scroll="handleUserScroll">
         <div v-if="messages.length === 0" class="welcome-screen">
           <div class="welcome-content">
             <div class="welcome-logo">
@@ -204,6 +212,7 @@
               <MarkedRenderer v-if="rendererType === 'marked'" :content="message.text" />
               <MarkdownItRenderer v-else-if="rendererType === 'markdown-it'" :content="message.text" />
               <MarkdownComparison v-else-if="rendererType === 'comparison'" :content="message.text" />
+              <EnhancedMarkdownRenderer v-else-if="rendererType === 'enhanced'" :content="message.text" />
               <MarkdownRenderer v-else :content="message.text" />
               
               <!-- 助手消息工具栏 -->
@@ -219,6 +228,27 @@
                   </svg>
                   <span>复制</span>
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 思考中的消息 -->
+        <div v-if="isLoading" class="message assistant">
+          <div class="message-avatar">
+            <div class="assistant-avatar">
+              <span class="avatar-icon">🤖</span>
+            </div>
+          </div>
+          <div class="message-content">
+            <div class="message-text">
+              <div class="thinking-indicator">
+                <div class="loading-dots">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+                <span>正在思考...</span>
               </div>
             </div>
           </div>
@@ -277,12 +307,30 @@
           </div>
           <div class="files-list">
             <div v-for="(file, index) in attachedFiles" :key="index" class="file-item">
-              <div class="file-info">
-                <span class="file-icon">{{ getFileIcon(file.name) }}</span>
-                <span class="file-name">{{ file.name }}</span>
-                <span class="file-size">{{ formatFileSize(file.size) }}</span>
+              <div class="file-preview">
+                <!-- 图片预览 -->
+                <div v-if="FileProcessor.getFileCategory(file.type) === 'image'" class="image-preview">
+                  <img :src="filePreviews[`${file.name}-${file.size}-${file.lastModified}`]?.url" :alt="file.name" />
+                </div>
+                <!-- 文件图标 -->
+                <div v-else class="file-icon-large">
+                  {{ getFileIcon(file.name) }}
+                </div>
               </div>
-              <button class="remove-file" @click="removeFile(index)">
+              <div class="file-info">
+                <div class="file-name">{{ file.name }}</div>
+                <div class="file-size">{{ formatFileSize(file.size) }}</div>
+                <!-- 文件处理状态 -->
+                <div v-if="filePreviews[`${file.name}-${file.size}-${file.lastModified}`]?.isProcessing" class="file-processing">
+                  <div class="processing-spinner"></div>
+                  <span>正在处理...</span>
+                </div>
+                <!-- 文件预览文本 -->
+                <div v-else-if="filePreviews[`${file.name}-${file.size}-${file.lastModified}`]?.preview" class="file-preview-text">
+                  {{ filePreviews[`${file.name}-${file.size}-${file.lastModified}`].preview }}
+                </div>
+              </div>
+              <button class="remove-file" @click="removeFile(index)" title="移除文件">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <line x1="18" y1="6" x2="6" y2="18"></line>
                   <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -294,14 +342,7 @@
         
         <div class="input-info">
           <span class="input-hint">Enter 发送，Shift + Enter 换行</span>
-          <div v-if="isLoading" class="global-loading">
-            <div class="loading-dots">
-              <span></span>
-              <span></span>
-              <span></span>
-            </div>
-            <span>正在思考...</span>
-          </div>
+          
         </div>
         </div>
       </div>
@@ -311,14 +352,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, onMounted, watch } from 'vue'
-import { askQuestionStream } from '@/services/api'
+import { ref, nextTick, onMounted, onUnmounted, watch } from 'vue'
+import { askQuestionStream, askQuestionStreamWithFiles } from '@/services/api'
+import FileProcessor from '@/services/fileProcessor'
 import { ErrorHandler } from '@/utils/errorHandler'
 import { useSessionStore } from '@/stores/session'
 import MarkdownRenderer from './MarkdownRenderer.vue'
-import MarkedRenderer from './MarkedRenderer.vue'
 import MarkdownItRenderer from './MarkdownItRenderer.vue'
 import MarkdownComparison from './MarkdownComparison.vue'
+import EnhancedMarkdownRenderer from './EnhancedMarkdownRenderer.vue'
 
 interface Message {
   type: 'user' | 'assistant'
@@ -336,6 +378,7 @@ const sessionStore = useSessionStore()
 // 附件相关状态
 const attachedFiles = ref<File[]>([])
 const fileInputRef = ref<HTMLInputElement>()
+const filePreviews = ref<{ [key: string]: { url: string; preview?: string; isProcessing?: boolean } }>({})
 
 // 问题导航相关状态
 const showQuestionsList = ref(false)
@@ -343,6 +386,10 @@ const questionsListPosition = ref({ x: 0, y: 0 })
 const isDragging = ref(false)
 const dragStartY = ref(0)
 const navPosition = ref(50) // 百分比位置
+
+// 滚动控制状态
+const shouldAutoScroll = ref(true)
+const isUserScrolling = ref(false)
 
 // 监听输入内容变化，自动调整高度
 watch(currentMessage, () => {
@@ -355,7 +402,7 @@ watch(currentMessage, () => {
 const showSessionList = ref(false)
 
 // 渲染器类型选择
-const rendererType = ref<'marked' | 'markdown-it' | 'comparison'>('markdown-it')
+const rendererType = ref<'marked' | 'markdown-it' | 'comparison' | 'enhanced'>('enhanced')
 
 // 监听当前会话变化，加载历史消息
 watch(() => sessionStore.currentSessionId, async (newSessionId) => {
@@ -384,6 +431,15 @@ watch(() => sessionStore.currentMessages, (newMessages) => {
   }
 }, { deep: true })
 
+// 监听loading状态变化，确保思考提示可见
+watch(() => isLoading.value, (newValue) => {
+  if (newValue) {
+    shouldAutoScroll.value = true
+    isUserScrolling.value = false
+    nextTick(() => scrollToBottom())
+  }
+})
+
 const suggestedPrompts = ref([
   '如何优化React应用性能？',
   '解释一下微服务架构的优势',
@@ -392,8 +448,34 @@ const suggestedPrompts = ref([
 ])
 
 const scrollToBottom = () => {
-  if (messagesContainer.value) {
+  if (messagesContainer.value && shouldAutoScroll.value) {
     messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+  }
+}
+
+// 检查是否在底部附近
+const isNearBottom = () => {
+  if (!messagesContainer.value) return true
+  const container = messagesContainer.value
+  const threshold = 100 // 距离底部100px以内认为在底部
+  return container.scrollHeight - container.scrollTop - container.clientHeight <= threshold
+}
+
+// 处理用户滚动事件
+const handleUserScroll = () => {
+  if (!messagesContainer.value) return
+  
+  const wasAtBottom = isNearBottom()
+  const isAtBottomNow = isNearBottom()
+  
+  // 如果用户向上滚动，停止自动滚动
+  if (!isAtBottomNow) {
+    isUserScrolling.value = true
+    shouldAutoScroll.value = false
+  } else if (isAtBottomNow && isUserScrolling.value) {
+    // 如果用户滚动回底部，恢复自动滚动
+    shouldAutoScroll.value = true
+    isUserScrolling.value = false
   }
 }
 
@@ -420,8 +502,10 @@ const sendMessage = async () => {
 
   // 构建用户消息文本，包含附件信息
   let messageText = currentMessage.value.trim()
-  if (attachedFiles.value.length > 0) {
-    const fileNames = attachedFiles.value.map(file => file.name).join(', ')
+  const filesToProcess = [...attachedFiles.value]
+  
+  if (filesToProcess.length > 0) {
+    const fileNames = filesToProcess.map(file => file.name).join(', ')
     messageText = messageText ? `${messageText}\n\n附件: ${fileNames}` : `附件: ${fileNames}`
   }
 
@@ -449,6 +533,10 @@ const sendMessage = async () => {
   currentMessage.value = ''
   attachedFiles.value = []
   isLoading.value = true
+  
+  // 发送消息时重置自动滚动状态
+  shouldAutoScroll.value = true
+  isUserScrolling.value = false
   scrollToBottom()
 
   // 重置输入框高度
@@ -458,26 +546,57 @@ const sendMessage = async () => {
 
   try {
     let isFirstChunk = true
-    await askQuestionStream(question, (chunk: string) => {
-      // 如果是第一个数据块，先停止loading，创建助手消息
-      if (isFirstChunk) {
-        isLoading.value = false
-        const assistantMessage: Message = {
-          type: 'assistant',
-          text: chunk,
-          timestamp: new Date()
+    
+    if (filesToProcess.length > 0) {
+      // 有附件时使用带文件的API
+      await askQuestionStreamWithFiles(question, filesToProcess, (chunk: string) => {
+        // 如果是第一个数据块，先停止loading，创建助手消息
+        if (isFirstChunk) {
+          isLoading.value = false
+          const assistantMessage: Message = {
+            type: 'assistant',
+            text: chunk,
+            timestamp: new Date()
+          }
+          messages.value.push(assistantMessage)
+          isFirstChunk = false
+        } else {
+          // 更新最后一条助手消息的内容
+          const lastMessage = messages.value[messages.value.length - 1]
+          if (lastMessage && lastMessage.type === 'assistant') {
+            lastMessage.text += chunk
+          }
         }
-        messages.value.push(assistantMessage)
-        isFirstChunk = false
-      } else {
-        // 更新最后一条助手消息的内容
-        const lastMessage = messages.value[messages.value.length - 1]
-        if (lastMessage && lastMessage.type === 'assistant') {
-          lastMessage.text += chunk
+        scrollToBottom()
+      }, undefined, sessionStore.currentSessionId || undefined)
+    } else {
+      // 没有附件时使用普通API
+      await askQuestionStream(question, (chunk: string) => {
+        // 如果是第一个数据块，先停止loading，创建助手消息
+        if (isFirstChunk) {
+          isLoading.value = false
+          const assistantMessage: Message = {
+            type: 'assistant',
+            text: chunk,
+            timestamp: new Date()
+          }
+          messages.value.push(assistantMessage)
+          isFirstChunk = false
+        } else {
+          // 更新最后一条助手消息的内容
+          const lastMessage = messages.value[messages.value.length - 1]
+          if (lastMessage && lastMessage.type === 'assistant') {
+            lastMessage.text += chunk
+          }
         }
-      }
-      scrollToBottom()
-    }, undefined, sessionStore.currentSessionId || undefined)
+        scrollToBottom()
+      }, undefined, sessionStore.currentSessionId || undefined)
+    }
+    
+    // 流式输出完成后，确保自动滚动
+    shouldAutoScroll.value = true
+    isUserScrolling.value = false
+    nextTick(() => scrollToBottom())
   } catch (error) {
     console.error('发送消息失败:', error)
     const appError = ErrorHandler.handle(error)
@@ -533,21 +652,83 @@ const usePrompt = (prompt: string) => {
 }
 
 // 附件相关函数
-const handleFileSelect = (event: Event) => {
+const handleFileSelect = async (event: Event) => {
   const target = event.target as HTMLInputElement
   if (target.files) {
-    attachedFiles.value = [...attachedFiles.value, ...Array.from(target.files)]
+    const newFiles = Array.from(target.files)
+    
+    // 检查文件类型是否支持
+    const unsupportedFiles = newFiles.filter(file => !FileProcessor.isSupportedType(file.type))
+    if (unsupportedFiles.length > 0) {
+      const unsupportedNames = unsupportedFiles.map(f => f.name).join(', ')
+      alert(`不支持的文件类型: ${unsupportedNames}\n支持的类型: 图片(JPG, PNG, GIF等)、PDF、Word、Excel、文本文件等`)
+      target.value = ''
+      return
+    }
+    
+    // 添加文件到列表
+    attachedFiles.value = [...attachedFiles.value, ...newFiles]
+    
+    // 为每个文件创建预览
+    for (const file of newFiles) {
+      const fileKey = `${file.name}-${file.size}-${file.lastModified}`
+      
+      // 创建图片预览或文件图标
+      if (FileProcessor.getFileCategory(file.type) === 'image') {
+        const url = URL.createObjectURL(file)
+        filePreviews.value[fileKey] = { url }
+      } else {
+        filePreviews.value[fileKey] = { url: '' }
+      }
+      
+      // 异步处理文件以获取预览文本
+      try {
+        filePreviews.value[fileKey].isProcessing = true
+        const result = await FileProcessor.processFile(file)
+        if (result.text) {
+          filePreviews.value[fileKey].preview = result.preview || result.text.substring(0, 200) + '...'
+        }
+        if (result.error) {
+          filePreviews.value[fileKey].preview = `处理失败: ${result.error}`
+        }
+      } catch (error) {
+        filePreviews.value[fileKey].preview = `处理失败: ${error}`
+      } finally {
+        filePreviews.value[fileKey].isProcessing = false
+      }
+    }
   }
   // 清空input值，以便可以重复选择同一个文件
   target.value = ''
 }
 
 const removeFile = (index: number) => {
+  const file = attachedFiles.value[index]
+  const fileKey = `${file.name}-${file.size}-${file.lastModified}`
+  
+  // 清理预览URL
+  if (filePreviews.value[fileKey]?.url) {
+    URL.revokeObjectURL(filePreviews.value[fileKey].url)
+  }
+  
+  // 删除预览信息
+  delete filePreviews.value[fileKey]
+  
+  // 从列表中移除文件
   attachedFiles.value.splice(index, 1)
 }
 
 const clearFiles = () => {
+  // 清理所有预览URL
+  Object.values(filePreviews.value).forEach(preview => {
+    if (preview.url) {
+      URL.revokeObjectURL(preview.url)
+    }
+  })
+  
+  // 清空文件列表和预览
   attachedFiles.value = []
+  filePreviews.value = {}
 }
 
 const getFileIcon = (fileName: string): string => {
@@ -644,9 +825,37 @@ const getUserQuestions = () => {
 // 显示问题列表
 const showQuestionsPopup = (event: MouseEvent) => {
   const rect = (event.target as HTMLElement).getBoundingClientRect()
+  const popupWidth = 300
+  const popupHeight = 400
+  const margin = 10
+  
+  // 计算初始位置（气泡左侧）
+  let left = rect.left - popupWidth - 10
+  let top = rect.top
+  
+  // 确保不超出屏幕左边界
+  if (left < margin) {
+    left = rect.right + 10 // 如果左侧空间不够，显示在右侧
+  }
+  
+  // 确保不超出屏幕右边界
+  if (left + popupWidth > window.innerWidth - margin) {
+    left = window.innerWidth - popupWidth - margin
+  }
+  
+  // 确保不超出屏幕上边界
+  if (top < margin) {
+    top = margin
+  }
+  
+  // 确保不超出屏幕下边界
+  if (top + popupHeight > window.innerHeight - margin) {
+    top = window.innerHeight - popupHeight - margin
+  }
+  
   questionsListPosition.value = {
-    x: rect.left - 200, // 显示在气泡左侧
-    y: rect.top
+    x: left,
+    y: top
   }
   showQuestionsList.value = true
 }
@@ -689,6 +898,7 @@ const handleMouseMove = (event: MouseEvent) => {
   // 限制在屏幕范围内
   if (percentage >= 10 && percentage <= 90) {
     navPosition.value = percentage
+    updatePopupPosition()
   }
 }
 
@@ -698,12 +908,37 @@ const handleMouseUp = () => {
   document.removeEventListener('mouseup', handleMouseUp)
 }
 
+// 更新弹窗位置
+const updatePopupPosition = () => {
+  const navElement = document.querySelector('.floating-questions-nav') as HTMLElement
+  if (!navElement) return
+  
+  const position = navPosition.value
+  if (position > 70) {
+    navElement.setAttribute('data-position', 'bottom')
+  } else if (position < 30) {
+    navElement.setAttribute('data-position', 'top')
+  } else {
+    navElement.removeAttribute('data-position')
+  }
+}
+
+// 生命周期钩子
 onMounted(async () => {
   try {
     await sessionStore.loadSessions()
   } catch (error) {
     console.error('初始化会话失败:', error)
   }
+  updatePopupPosition()
+})
+
+// 监听navPosition变化，更新弹窗位置
+watch(() => navPosition.value, () => {
+  updatePopupPosition()
+})
+
+onUnmounted(() => {
 })
 </script>
 
@@ -994,6 +1229,7 @@ onMounted(async () => {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  position: relative;
 }
 
 .chat-messages {
@@ -1001,6 +1237,7 @@ onMounted(async () => {
   overflow-y: auto;
   padding: 0;
   background: #ffffff;
+  min-height: 0; /* 确保flex子项可以缩小 */
 }
 
 .welcome-screen {
@@ -1226,16 +1463,33 @@ onMounted(async () => {
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
   z-index: 1000;
   overflow: hidden;
-  right: 40px;
-  top: 0;
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.2s ease, visibility 0.2s ease;
+  right: 40px;
 }
 
 .floating-questions-nav:hover .questions-popup {
   opacity: 1;
   visibility: visible;
+}
+
+/* 当气泡在底部时，弹窗向上显示 */
+.floating-questions-nav[data-position="bottom"] .questions-popup {
+  bottom: 40px;
+  top: auto;
+}
+
+/* 当气泡在顶部时，弹窗向下显示 */
+.floating-questions-nav[data-position="top"] .questions-popup {
+  top: 40px;
+  bottom: auto;
+}
+
+/* 默认情况下，弹窗向上显示 */
+.floating-questions-nav:not([data-position]) .questions-popup {
+  bottom: 40px;
+  top: auto;
 }
 
 .questions-popup-header {
@@ -1364,6 +1618,10 @@ onMounted(async () => {
   border-top: 1px solid #e5e7eb;
   background: #ffffff;
   padding: 16px 24px;
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  flex-shrink: 0; /* 防止压缩 */
 }
 
 .input-wrapper {
@@ -1495,12 +1753,16 @@ onMounted(async () => {
   color: #9ca3af;
 }
 
-.global-loading {
+.thinking-indicator {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: 14px;
   color: #6b7280;
+  padding: 12px 16px;
+  /* background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb; */
 }
 
 .loading-dots {
@@ -1619,12 +1881,118 @@ onMounted(async () => {
 
 .file-item {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 8px 12px;
+  gap: 12px;
+  padding: 12px;
   background: white;
   border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.file-item:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.file-preview {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 6px;
+  overflow: hidden;
+  background: #f3f4f6;
+}
+
+.image-preview {
+  width: 100%;
+  height: 100%;
+}
+
+.image-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.file-icon-large {
+  font-size: 24px;
+  color: #6b7280;
+}
+
+.file-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.file-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1f2937;
+  margin-bottom: 2px;
+  word-break: break-all;
+}
+
+.file-size {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.file-processing {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #3b82f6;
+}
+
+.processing-spinner {
+  width: 12px;
+  height: 12px;
+  border: 1px solid #e5e7eb;
+  border-top: 1px solid #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.file-preview-text {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.4;
+  max-height: 40px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.remove-file {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.remove-file:hover {
+  background: #fee2e2;
+  color: #ef4444;
 }
 
 .file-info {

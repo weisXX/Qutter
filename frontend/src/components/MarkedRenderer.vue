@@ -3,7 +3,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { marked } from 'marked'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
@@ -14,8 +14,19 @@ interface Props {
 
 const props = defineProps<Props>()
 
+// 创建自定义渲染器
+const renderer = new marked.Renderer()
+
+// 自定义列表项渲染，确保列表项内容不换行
+renderer.listitem = (text: string) => {
+  // 将段落标签替换为span
+  const processedText = text.replace(/<p>/g, '<span style="display: inline;">').replace(/<\/p>/g, '</span>')
+  return `<li>${processedText}</li>`
+}
+
 // 配置marked选项
 marked.setOptions({
+  renderer: renderer, // 使用自定义渲染器
   highlight: (code: string, lang: string) => {
     if (lang && hljs.getLanguage(lang)) {
       try {
@@ -39,75 +50,89 @@ marked.setOptions({
 const renderedContent = computed(() => {
   if (!props.content) return ''
   
-  // 先处理HTML实体解码，避免marked重复转义
+  // 预处理内容，处理HTML标签和数学公式
   let content = props.content
+    // 先处理HTML实体解码，避免marked重复转义
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
+    .replace(/&#39;/g, "'")
+    // 移除可能干扰数学公式的HTML标签
+    .replace(/<br[^>]*>/g, ' ') // 将<br>替换为空格
+    .replace(/<br\s*\/>/g, ' ') // 处理自闭合<br/>
+    .replace(/&nbsp;/g, ' ') // 替换不间断空格
+    // 处理数学公式中的特殊字符
+    .replace(/\\cdotp/g, '/')
+    // 临时保护数学公式中的特殊符号
+    .replace(/\$(.*?)\$/g, (match, formula) => {
+      // 移除公式内的HTML标签
+      const cleanFormula = formula.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ')
+      return `$${cleanFormula}$`
+    })
+    .replace(/\$\$(.*?)\$\$/g, (match, formula) => {
+      // 移除公式内的HTML标签
+      const cleanFormula = formula.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ')
+      return `$$${cleanFormula}$$`
+    })
   
   // 使用marked解析Markdown
   let html = marked(content)
   
   // 先处理代码块，确保它们不被行内代码处理影响
   html = html.replace(/<pre><code class="hljs language-(.*?)">(.*?)<\/code><\/pre>/gs, (match, lang, code) => {
-    // 代码块已经由marked的highlight函数处理，不需要额外处理
-    return match
-  })
-  
-  // 处理行内代码标签（不在pre标签内的code），添加语法高亮
-  // 使用更简单的方法：先提取所有pre块，然后处理剩下的code标签
-  const preBlocks: string[] = []
-  let preIndex = 0
-  
-  // 提取并替换pre块
-  html = html.replace(/<pre[\s\S]*?<\/pre>/g, (match) => {
-    preBlocks.push(match)
-    return `__PRE_BLOCK_${preIndex++}__`
-  })
-  
-  // 处理行内代码
-  html = html.replace(/<code>(.*?)<\/code>/g, (match, code) => {
     // 解码HTML实体
     const decodedCode = code
-      .replace(/&amp;/g, '&')
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&')
       .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'");
+      .replace(/&#39;/g, "'")
     
-    // 检查是否是markdown语法（如 ### 标题）
-    if (/^#{1,6}\s+.+|^[\*\-\+]\s+|^\d+\.\s+/.test(decodedCode.trim())) {
-      // 如果是markdown语法，不进行代码高亮，保持原样
-      return match
+    // 重新高亮
+    try {
+      if (lang && hljs.getLanguage(lang)) {
+        const highlighted = hljs.highlight(decodedCode, { language: lang }).value
+        return `<pre><code class="hljs language-${lang}">${highlighted}</code></pre>`
+      }
+    } catch (err) {
+      console.warn('代码块高亮失败:', err)
     }
     
-    // 尝试检测语言类型
-    let detectedLang = detectLanguage(decodedCode.trim())
+    // 如果高亮失败，返回原始代码
+    return `<pre><code class="hljs language-${lang}">${decodedCode}</code></pre>`
+  })
+  
+  // 处理行内代码语言检测
+  html = html.replace(/<code class="hljs">(.*?)<\/code>/g, (match, code) => {
+    // 解码HTML实体
+    const decodedCode = code
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+    
+    // 尝试检测语言
+    const detectedLang = detectLanguage(decodedCode.trim())
     
     if (detectedLang && hljs.getLanguage(detectedLang)) {
       try {
-        const highlighted = hljs.highlight(decodedCode.trim(), { language: detectedLang }).value
+        const highlighted = hljs.highlight(decodedCode, { language: detectedLang }).value
         return `<code class="hljs language-${detectedLang}">${highlighted}</code>`
       } catch (err) {
         console.warn('行内代码高亮失败:', err)
       }
     }
     
-    // 如果无法检测语言或高亮失败，使用自动检测
+    // 如果无法检测语言，使用自动检测
     try {
-      const highlighted = hljs.highlightAuto(decodedCode.trim()).value
+      const highlighted = hljs.highlightAuto(decodedCode).value
       return `<code class="hljs">${highlighted}</code>`
     } catch (err) {
       console.warn('行内代码自动高亮失败:', err)
-      return match
+      return `<code>${decodedCode}</code>`
     }
-  })
-  
-  // 恢复pre块
-  html = html.replace(/__PRE_BLOCK_(\d+)__/g, (match, index) => {
-    return preBlocks[parseInt(index)]
   })
   
   return html
@@ -156,35 +181,41 @@ function detectLanguage(code: string): string | null {
 
 <style scoped>
 .marked-content {
-  line-height: 1.3;
+  line-height: 1.6;
   color: #1f2937;
 }
 
+/* 标题样式 */
 .marked-content :deep(h1),
 .marked-content :deep(h2),
 .marked-content :deep(h3),
 .marked-content :deep(h4),
 .marked-content :deep(h5),
 .marked-content :deep(h6) {
-  margin: 0.8em 0 0.3em 0;
+  margin: 1em 0 0.5em 0;
   font-weight: 600;
   color: #1f2937;
-}
-
-.marked-content :deep(h1) { font-size: 1.6em; }
-.marked-content :deep(h2) { font-size: 1.4em; }
-.marked-content :deep(h3) { font-size: 1.2em; }
-.marked-content :deep(h4) { font-size: 1.1em; }
-
-.marked-content :deep(p) {
-  margin: 0.3em 0;
   line-height: 1.3;
 }
 
+.marked-content :deep(h1) { font-size: 1.8em; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.3em; }
+.marked-content :deep(h2) { font-size: 1.5em; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3em; }
+.marked-content :deep(h3) { font-size: 1.3em; }
+.marked-content :deep(h4) { font-size: 1.2em; }
+.marked-content :deep(h5) { font-size: 1.1em; }
+.marked-content :deep(h6) { font-size: 1em; }
+
+/* 段落样式 */
+.marked-content :deep(p) {
+  margin: 0.8em 0;
+  line-height: 1.6;
+}
+
+/* 列表样式 */
 .marked-content :deep(ul),
 .marked-content :deep(ol) {
-  margin: 0.5em 0;
-  padding-left: 1.5em;
+  margin: 0.8em 0;
+  padding-left: 2em;
 }
 
 .marked-content :deep(ul) {
@@ -196,8 +227,8 @@ function detectLanguage(code: string): string | null {
 }
 
 .marked-content :deep(li) {
-  margin: 0.2em 0;
-  line-height: 1.4;
+  margin: 0.3em 0;
+  line-height: 1.6;
 }
 
 /* 嵌套列表样式 */
@@ -205,8 +236,8 @@ function detectLanguage(code: string): string | null {
 .marked-content :deep(ol ol),
 .marked-content :deep(ul ol),
 .marked-content :deep(ol ul) {
-  margin: 0.2em 0;
-  padding-left: 1.2em;
+  margin: 0.3em 0;
+  padding-left: 1.5em;
 }
 
 .marked-content :deep(ul ul) {
@@ -217,261 +248,123 @@ function detectLanguage(code: string): string | null {
   list-style-type: square;
 }
 
+/* 行内代码样式 */
 .marked-content :deep(code:not(.hljs)) {
   background-color: #f1f5f9;
-  padding: 0.1em 0.3em;
-  border-radius: 3px;
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-  font-size: 0.85em;
+  font-size: 0.9em;
   color: #1f2937;
 }
 
-/* 行内代码高亮样式 */
-.marked-content :deep(code.hljs) {
-  background-color: #f1f5f9;
-  padding: 0.1em 0.3em;
-  border-radius: 3px;
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-  font-size: 0.85em;
-  color: #1f2937;
-  display: inline;
-}
-
+/* 代码块样式 */
 .marked-content :deep(pre) {
-  background-color: #1e293b;
-  border: 1px solid #334155;
+  background-color: #f6f8fa;
+  border: 1px solid #d0d7de;
   border-radius: 8px;
-  padding: 12px;
+  padding: 16px;
   overflow-x: auto;
-  margin: 0.8em 0;
+  margin: 1em 0;
 }
 
 .marked-content :deep(pre code) {
   background-color: transparent;
   padding: 0;
-  color: #e2e8f0;
-  font-size: 0.85em;
-  line-height: 1.4;
-}
-
-/* 代码高亮样式 - 深色主题（代码块） */
-.marked-content :deep(pre .hljs) {
-  background: #1e293b;
-  color: #e2e8f0;
-}
-
-/* 行内代码高亮样式 - 浅色主题 */
-.marked-content :deep(code.hljs) {
-  background: #f1f5f9;
   color: #1f2937;
+  font-size: 0.9em;
+  line-height: 1.5;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
 }
 
-.marked-content :deep(.hljs-comment),
-.marked-content :deep(.hljs-quote) {
-  color: #94a3b8;
-  font-style: italic;
+/* 行内代码高亮样式 */
+.marked-content :deep(code.hljs) {
+  background-color: #f1f5f9;
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 0.9em;
+  color: #1f2937;
+  display: inline;
 }
 
-.marked-content :deep(.hljs-keyword),
-.marked-content :deep(.hljs-selector-tag),
-.marked-content :deep(.hljs-subst) {
-  color: #f472b6;
+/* 任务列表样式 */
+.marked-content :deep(.task-list-item) {
+  list-style: none;
+  margin-left: -1.5em;
 }
 
-.marked-content :deep(.hljs-number),
-.marked-content :deep(.hljs-literal),
-.marked-content :deep(.hljs-variable),
-.marked-content :deep(.hljs-template-variable),
-.marked-content :deep(.hljs-tag .hljs-attr) {
-  color: #60a5fa;
+.marked-content :deep(.task-list-item input) {
+  margin-right: 0.5em;
 }
 
-.marked-content :deep(.hljs-string),
-.marked-content :deep(.hljs-doctag) {
-  color: #4ade80;
-}
-
-.marked-content :deep(.hljs-title),
-.marked-content :deep(.hljs-section),
-.marked-content :deep(.hljs-selector-id) {
-  color: #a78bfa;
-  font-weight: bold;
-}
-
-.marked-content :deep(.hljs-type),
-.marked-content :deep(.hljs-class .hljs-title) {
-  color: #a78bfa;
-}
-
-.marked-content :deep(.hljs-tag),
-.marked-content :deep(.hljs-name),
-.marked-content :deep(.hljs-attribute) {
-  color: #34d399;
-  font-weight: normal;
-}
-
-.marked-content :deep(.hljs-regexp),
-.marked-content :deep(.hljs-link) {
-  color: #fbbf24;
-}
-
-.marked-content :deep(.hljs-symbol),
-.marked-content :deep(.hljs-bullet) {
-  color: #60a5fa;
-}
-
-.marked-content :deep(.hljs-built_in),
-.marked-content :deep(.hljs-builtin-name) {
-  color: #60a5fa;
-}
-
-.marked-content :deep(.hljs-meta) {
-  color: #34d399;
-}
-
-.marked-content :deep(.hljs-deletion) {
-  background: #7f1d1d;
-  color: #fecaca;
-}
-
-.marked-content :deep(.hljs-addition) {
-  background: #14532d;
-  color: #bbf7d0;
-}
-
-.marked-content :deep(.hljs-emphasis) {
-  font-style: italic;
-}
-
-.marked-content :deep(.hljs-strong) {
-  font-weight: bold;
-}
-
-/* 行内代码特有的高亮样式 */
-.marked-content :deep(code.hljs .hljs-comment),
-.marked-content :deep(code.hljs .hljs-quote) {
-  color: #6b7280;
-  font-style: italic;
-}
-
-.marked-content :deep(code.hljs .hljs-keyword),
-.marked-content :deep(code.hljs .hljs-selector-tag),
-.marked-content :deep(code.hljs .hljs-subst) {
-  color: #0000ff;
-  font-weight: bold;
-}
-
-.marked-content :deep(code.hljs .hljs-number),
-.marked-content :deep(code.hljs .hljs-literal) {
-  color: #098658;
-}
-
-.marked-content :deep(code.hljs .hljs-variable),
-.marked-content :deep(code.hljs .hljs-template-variable) {
-  color: #001080;
-}
-
-.marked-content :deep(code.hljs .hljs-string),
-.marked-content :deep(code.hljs .hljs-doctag) {
-  color: #a31515;
-}
-
-.marked-content :deep(code.hljs .hljs-title),
-.marked-content :deep(code.hljs .hljs-section),
-.marked-content :deep(code.hljs .hljs-selector-id) {
-  color: #7c3aed;
-  font-weight: bold;
-}
-
-.marked-content :deep(code.hljs .hljs-type),
-.marked-content :deep(code.hljs .hljs-class .hljs-title) {
-  color: #267f99;
-}
-
-.marked-content :deep(code.hljs .hljs-tag),
-.marked-content :deep(code.hljs .hljs-name) {
-  color: #800000;
-}
-
-.marked-content :deep(code.hljs .hljs-attribute) {
-  color: #0451a5;
-}
-
-.marked-content :deep(code.hljs .hljs-regexp),
-.marked-content :deep(code.hljs .hljs-link) {
-  color: #d97706;
-}
-
-.marked-content :deep(code.hljs .hljs-symbol),
-.marked-content :deep(code.hljs .hljs-bullet) {
-  color: #2563eb;
-}
-
-.marked-content :deep(code.hljs .hljs-built_in),
-.marked-content :deep(code.hljs .hljs-builtin-name) {
-  color: #2563eb;
-}
-
-.marked-content :deep(code.hljs .hljs-function) {
-  color: #795e26;
-}
-
-.marked-content :deep(code.hljs .hljs-params) {
-  color: #001080;
-}
-
-.marked-content :deep(code.hljs .hljs-meta) {
-  color: #059669;
-}
-
+/* 引用块样式 */
 .marked-content :deep(blockquote) {
-  border-left: 4px solid #e2e8f0;
-  padding: 0 12px;
-  margin: 0.5em 0;
-  color: #64748b;
-  background: #f8fafc;
-  border-radius: 0 4px 4px 0;
+  border-left: 4px solid #d0d7de;
+  padding: 0 1em;
+  margin: 1em 0;
+  color: #57606a;
+  background: #f6f8fa;
+  border-radius: 0 6px 6px 0;
 }
 
+.marked-content :deep(blockquote p) {
+  margin: 0.5em 0;
+}
+
+/* 表格样式 */
 .marked-content :deep(table) {
   border-collapse: collapse;
   width: 100%;
-  margin: 0.8em 0;
+  margin: 1em 0;
 }
 
 .marked-content :deep(th),
 .marked-content :deep(td) {
-  border: 1px solid #e2e8f0;
-  padding: 6px 10px;
+  border: 1px solid #d0d7de;
+  padding: 8px 12px;
   text-align: left;
 }
 
 .marked-content :deep(th) {
-  background-color: #f1f5f9;
+  background-color: #f6f8fa;
   font-weight: 600;
-  color: #1e293b;
+  color: #1f2937;
 }
 
+.marked-content :deep(tr:nth-child(even)) {
+  background-color: #f6f8fa;
+}
+
+/* 链接样式 */
 .marked-content :deep(a) {
-  color: #3b82f6;
+  color: #0969da;
   text-decoration: none;
 }
 
 .marked-content :deep(a:hover) {
   text-decoration: underline;
-  color: #2563eb;
+  color: #0550ae;
 }
 
+/* 水平线样式 */
 .marked-content :deep(hr) {
   border: none;
-  border-top: 1px solid #e2e8f0;
-  margin: 1.5em 0;
+  border-top: 1px solid #d0d7de;
+  margin: 2em 0;
 }
 
+/* 图片样式 */
 .marked-content :deep(img) {
   max-width: 100%;
   height: auto;
   border-radius: 6px;
   margin: 0.5em 0;
+}
+
+/* 代码块深色主题覆盖 */
+.marked-content :deep(.hljs) {
+  background: #f6f8fa !important;
+  color: #1f2937 !important;
 }
 </style>

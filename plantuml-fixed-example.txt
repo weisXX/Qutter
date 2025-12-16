@@ -1,0 +1,67 @@
+@startuml
+skinparam backgroundColor #F9F9F9
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam defaultFontName "Microsoft YaHei"
+
+' 类图版本 - 展示接口关系
+interface PostService {
+  + createPost(userId, dto): Post
+  + updatePost(postId, dto): void
+  + deletePost(postId, dto): void
+  + addTag(postId, tagName): void
+}
+
+interface CommentService {
+  + addComment(userId, postId, dto): Comment
+  + editComment(commentId, dto): void
+}
+
+class Post {
+  +id: Long
+  +title: String
+  +content: String
+  +authorId: Long
+}
+
+class Comment {
+  +id: Long
+  +content: String
+  +authorId: Long
+  +postId: Long
+}
+
+class User {
+  +id: Long
+  +username: String
+  +email: String
+}
+
+PostService <.. Post : implements
+CommentService <.. Comment : implements
+User -> Post : creates
+User -> Comment : writes
+
+note right of User
+  用例：发表博客
+  用户可以通过 PostService 创建帖子
+  通过 CommentService 添加评论
+end note
+@enduml
+
+' 如果要画时序图，应该这样写：
+' @startuml
+' actor User
+' participant PostService
+' participant CommentService
+' 
+' User -> PostService: createPost(userId, dto)
+' activate PostService
+' PostService --> User: Post
+' deactivate PostService
+' 
+' User -> CommentService: addComment(userId, postId, dto)
+' activate CommentService
+' CommentService --> User: Comment
+' deactivate CommentService
+' @endumul

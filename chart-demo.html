@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图表功能演示</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            color: #333;
+        }
+        .demo-section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #e1e5e9;
+            border-radius: 8px;
+            background: #f8f9fa;
+        }
+        .demo-title {
+            font-size: 1.5em;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #1f2937;
+        }
+        .demo-description {
+            margin-bottom: 15px;
+            color: #6b7280;
+        }
+        .code-block {
+            background: #f6f8fa;
+            border: 1px solid #d0d7de;
+            border-radius: 6px;
+            padding: 16px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        .note {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 4px;
+            padding: 12px;
+            margin: 10px 0;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <h1>图表功能演示文档</h1>
+    <p>本文档展示了如何在 Markdown 中使用各种图表，包括 UML 图、时序图、类图和数据可视化图表。</p>
+
+    <div class="demo-section">
+        <h2 class="demo-title">1. Mermaid 图表支持</h2>
+        <p class="demo-description">Mermaid 支持多种图表类型，包括流程图、时序图、类图、状态图等。</p>
+        
+        <h3>1.1 流程图</h3>
+        <div class="note">使用 <code>```mermaid</code> 代码块来创建 Mermaid 图表</div>
+        <div class="code-block">```mermaid
+graph TD
+    A[开始] --> B{是否登录?}
+    B -->|是| C[显示主页]
+    B -->|否| D[跳转登录页]
+    D --> E[用户输入]
+    E --> F{验证成功?}
+    F -->|是| C
+    F -->|否| D
+    C --> G[结束]
+```</div>
+        
+        <h3>1.2 时序图</h3>
+        <div class="code-block">```mermaid
+sequenceDiagram
+    participant 用户
+    participant 前端
+    participant 后端
+    participant 数据库
+    
+    用户->>前端: 发送请求
+    前端->>后端: API 调用
+    后端->>数据库: 查询数据
+    数据库-->>后端: 返回结果
+    后端-->>前端: JSON 响应
+    前端-->>用户: 显示结果
+```</div>
+        
+        <h3>1.3 类图</h3>
+        <div class="code-block">```mermaid
+classDiagram
+    class Animal {
+        +String name
+        +int age
+        +eat()
+        +sleep()
+    }
+    
+    class Dog {
+        +String breed
+        +bark()
+    }
+    
+    class Cat {
+        +String color
+        +meow()
+    }
+    
+    Animal <|-- Dog
+    Animal <|-- Cat
+```</div>
+        
+        <h3>1.4 状态图</h3>
+        <div class="code-block">```mermaid
+stateDiagram-v2
+    [*] --> 待处理
+    待处理 --> 处理中: 开始处理
+    处理中 --> 已完成: 处理成功
+    处理中 --> 失败: 处理失败
+    失败 --> 待处理: 重试
+    已完成 --> [*]
+    失败 --> [*]: 放弃
+```</div>
+    </div>
+
+    <div class="demo-section">
+        <h2 class="demo-title">2. Chart.js 数据可视化</h2>
+        <p class="demo-description">使用 Chart.js 创建各种数据可视化图表，支持柱状图、折线图、饼图等。</p>
+        
+        <h3>2.1 柱状图</h3>
+        <div class="note">使用 <code>```chart</code> 代码块来创建 Chart.js 图表</div>
+        <div class="code-block">```chart
+{
+  "type": "bar",
+  "data": {
+    "labels": ["一月", "二月", "三月", "四月", "五月"],
+    "datasets": [{
+      "label": "销售额",
+      "data": [12000, 19000, 15000, 25000, 22000],
+      "backgroundColor": "rgba(54, 162, 235, 0.2)",
+      "borderColor": "rgba(54, 162, 235, 1)",
+      "borderWidth": 1
+    }]
+  },
+  "options": {
+    "plugins": {
+      "title": {
+        "display": true,
+        "text": "月度销售统计"
+      }
+    }
+  }
+}
+```</div>
+        
+        <h3>2.2 折线图</h3>
+        <div class="code-block">```chart
+{
+  "type": "line",
+  "data": {
+    "labels": ["周一", "周二", "周三", "周四", "周五", "周六", "周日"],
+    "datasets": [{
+      "label": "访问量",
+      "data": [1200, 1900, 1500, 2500, 2200, 3000, 2800],
+      "borderColor": "rgba(75, 192, 192, 1)",
+      "backgroundColor": "rgba(75, 192, 192, 0.2)",
+      "tension": 0.1
+    }]
+  },
+  "options": {
+    "plugins": {
+      "title": {
+        "display": true,
+        "text": "网站访问量趋势"
+      }
+    }
+  }
+}
+```</div>
+        
+        <h3>2.3 饼图</h3>
+        <div class="code-block">```chart
+{
+  "type": "pie",
+  "data": {
+    "labels": ["产品A", "产品B", "产品C", "产品D"],
+    "datasets": [{
+      "data": [30, 25, 20, 25],
+      "backgroundColor": [
+        "rgba(255, 99, 132, 0.2)",
+        "rgba(54, 162, 235, 0.2)",
+        "rgba(255, 205, 86, 0.2)",
+        "rgba(75, 192, 192, 0.2)"
+      ],
+      "borderColor": [
+        "rgba(255, 99, 132, 1)",
+        "rgba(54, 162, 235, 1)",
+        "rgba(255, 205, 86, 1)",
+        "rgba(75, 192, 192, 1)"
+      ],
+      "borderWidth": 1
+    }]
+  },
+  "options": {
+    "plugins": {
+      "title": {
+        "display": true,
+        "text": "产品销售占比"
+      }
+    }
+  }
+}
+```</div>
+        
+        <h3>2.4 简化格式</h3>
+        <div class="note">也支持简化的文本格式配置</div>
+        <div class="code-block">```chart
+type: bar
+title: 季度数据对比
+labels: Q1, Q2, Q3, Q4
+data: 150, 230, 180, 290
+```</div>
+    </div>
+
+    <div class="demo-section">
+        <h2 class="demo-title">3. 混合使用示例</h2>
+        <p class="demo-description">可以在同一个文档中混合使用 Markdown、Mermaid 和 Chart.js。</p>
+        
+        <div class="code-block"># 项目架构分析
+
+## 系统架构图
+
+```mermaid
+graph TB
+    subgraph "前端层"
+        A[Vue.js 应用]
+        B[图表组件]
+    end
+    
+    subgraph "后端层"
+        C[Express 服务器]
+        D[业务逻辑]
+    end
+    
+    subgraph "数据层"
+        E[数据库]
+        F[缓存]
+    end
+    
+    A --> C
+    B --> A
+    C --> D
+    D --> E
+    D --> F
+```
+
+## 性能指标
+
+```chart
+{
+  "type": "line",
+  "data": {
+    "labels": ["1月", "2月", "3月", "4月", "5月", "6月"],
+    "datasets": [
+      {
+        "label": "响应时间(ms)",
+        "data": [120, 115, 108, 95, 88, 82],
+        "borderColor": "rgb(255, 99, 132)",
+        "backgroundColor": "rgba(255, 99, 132, 0.2)",
+        "yAxisID": "y"
+      },
+      {
+        "label": "吞吐量(req/s)",
+        "data": [1000, 1200, 1400, 1600, 1800, 2000],
+        "borderColor": "rgb(54, 162, 235)",
+        "backgroundColor": "rgba(54, 162, 235, 0.2)",
+        "yAxisID": "y1"
+      }
+    ]
+  },
+  "options": {
+    "plugins": {
+      "title": {
+        "display": true,
+        "text": "系统性能趋势"
+      }
+    },
+    "scales": {
+      "y": {
+        "type": "linear",
+        "display": true,
+        "position": "left"
+      },
+      "y1": {
+        "type": "linear",
+        "display": true,
+        "position": "right",
+        "grid": {
+          "drawOnChartArea": false
+        }
+      }
+    }
+  }
+}
+```
+
+## 数据流程
+
+```mermaid
+sequenceDiagram
+    participant 用户
+    participant 前端
+    participant 后端
+    participant 数据库
+    
+    用户->>前端: 发起请求
+    前端->>后端: API 调用
+    后端->>数据库: 查询/更新
+    数据库-->>后端: 返回数据
+    后端-->>前端: JSON 响应
+    前端-->>用户: 渲染结果
+```
+
+## 总结
+
+通过结合使用 **Mermaid** 和 **Chart.js**，我们可以在文档中创建丰富的可视化内容：
+
+1. **Mermaid** 适合展示流程、架构和关系
+2. **Chart.js** 适合展示数据和统计信息
+3. 两者都可以与 Markdown 文本完美融合
+
+这种组合为技术文档和报告提供了强大的可视化能力。
+```</div>
+    </div>
+
+    <div class="demo-section">
+        <h2 class="demo-title">4. 使用说明</h2>
+        <ul>
+            <li><strong>Mermaid 图表</strong>：使用 <code>```mermaid</code> 代码块，支持流程图、时序图、类图、状态图等</li>
+            <li><strong>Chart.js 图表</strong>：使用 <code>```chart</code> 代码块，支持柱状图、折线图、饼图、雷达图等</li>
+            <li><strong>配置格式</strong>：支持 JSON 格式和简化文本格式</li>
+            <li><strong>主题支持</strong>：Mermaid 支持多种主题（default、dark、forest、neutral）</li>
+        </ul>
+    </div>
+</body>
+</html>

@@ -3,12 +3,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, ref } from 'vue'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 import markdownItTaskLists from 'markdown-it-task-lists'
 import markdownItTOC from 'markdown-it-table-of-contents'
+import markdownItTexmath from 'markdown-it-texmath'
+import katex from 'katex'
+import 'katex/dist/katex.min.css'
 
 interface Props {
   content: string
@@ -25,16 +28,22 @@ const md = new MarkdownIt({
   highlight: function (str: string, lang: string) {
     if (lang && hljs.getLanguage(lang)) {
       try {
-        return '<pre class="hljs"><code>' +
+        return '<pre class="hljs"><code id="' + generateCodeId() + '" class="hljs language-' + lang + '">' +
                hljs.highlight(str, { language: lang, ignoreIllegals: true }).value +
                '</code></pre>'
       } catch (__) {}
     }
-    return '<pre class="hljs"><code>' +
+    return '<pre class="hljs"><code id="' + generateCodeId() + '" class="hljs">' +
            md.utils.escapeHtml(str) +
            '</code></pre>'
   }
 })
+
+// 生成唯一代码ID
+const codeIdCounter = ref(0)
+const generateCodeId = () => {
+  return `code-${++codeIdCounter.value}-${Date.now()}`
+}
 
 // 添加任务列表支持
 md.use(markdownItTaskLists, {
@@ -53,8 +62,86 @@ md.use(markdownItTOC, {
   }
 })
 
+// 添加数学公式支持
+md.use(markdownItTexmath, {
+  engine: katex,
+  delimiters: ['dollars', 'brackets'],
+  katexOptions: {
+    throwOnError: false,
+    errorColor: '#cc0000'
+  }
+})
+
+// 自定义列表项渲染规则，确保列表项内容不换行
+md.renderer.rules.list_item_open = (tokens: any, idx: number) => {
+  return '<li>'
+}
+
+md.renderer.rules.list_item_close = (tokens: any, idx: number) => {
+  return '</li>'
+}
+
+// 自定义段落渲染规则，在列表项中的段落不换行
+md.renderer.rules.paragraph_open = (tokens: any, idx: number, options: any, env: any, renderer: any): string => {
+  // 检查是否在列表项中
+  const parentTokens = tokens.slice(0, idx).reverse()
+  const isInListItem = parentTokens.some((token: any) => token.type === 'list_item_open')
+  
+  if (isInListItem) {
+    return '<span style="display: inline;">'
+  }
+  return '<p>'
+}
+
+md.renderer.rules.paragraph_close = (tokens: any, idx: number, options: any, env: any, renderer: any): string => {
+  // 检查是否在列表项中
+  const parentTokens = tokens.slice(0, idx).reverse()
+  const isInListItem = parentTokens.some((token: any) => token.type === 'list_item_open')
+  
+  if (isInListItem) {
+    return '</span>'
+  }
+  return '</p>'
+}
+
+// 自定义代码块渲染规则，添加工具栏
+md.renderer.rules.fence = (tokens: any, idx: number, options: any, env: any, renderer: any) => {
+  const token = tokens[idx]
+  const langName = token.info ? md.utils.escapeHtml(token.info.trim()) : ''
+  const langClass = langName ? ` class="hljs language-${langName}"` : ' class="hljs"'
+  const codeId = generateCodeId()
+  
+  let highlighted = token.content
+  if (langName && hljs.getLanguage(langName)) {
+    try {
+      highlighted = hljs.highlight(token.content, { language: langName, ignoreIllegals: true }).value
+    } catch (err) {
+      console.warn('代码高亮失败:', err)
+    }
+  } else if (!langName) {
+    try {
+      highlighted = hljs.highlightAuto(token.content).value
+    } catch (err) {
+      console.warn('自动代码高亮失败:', err)
+    }
+  }
+  
+  return `<div class="code-block-container">
+    <div class="code-toolbar">
+      <span class="code-language">${langName || 'text'}</span>
+      <button class="copy-button" onclick="copyCode('${codeId}')" title="复制代码">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+      </button>
+    </div>
+    <pre class="hljs"><code id="${codeId}"${langClass}>${highlighted}</code></pre>
+  </div>`
+}
+
 // 自定义渲染规则，处理行内代码
-md.renderer.rules.code_inline = (tokens, idx) => {
+md.renderer.rules.code_inline = (tokens: any, idx: number) => {
   const token = tokens[idx]
   const code = token.content
   
@@ -78,85 +165,6 @@ md.renderer.rules.code_inline = (tokens, idx) => {
     console.warn('行内代码自动高亮失败:', err)
     return `<code>${md.utils.escapeHtml(code)}</code>`
   }
-}
-
-// 自定义代码块渲染规则，添加工具栏
-md.renderer.rules.fence = (tokens, idx, options, env, renderer) => {
-  const token = tokens[idx]
-  const info = token.info ? md.utils.unescapeAll(token.info).trim() : ''
-  const langName = info ? info.split(/\s+/g)[0] : ''
-  
-  let highlighted = token.content
-  if (langName && hljs.getLanguage(langName)) {
-    try {
-      highlighted = hljs.highlight(token.content, { language: langName }).value
-    } catch (err) {
-      console.warn('代码高亮失败:', err)
-    }
-  }
-  
-  const codeId = `code-block-${Date.now()}-${idx}`
-  const toolbar = `
-    <div class="code-toolbar">
-      <div class="code-language">${langName || 'text'}</div>
-      <div class="code-actions">
-        <button class="code-action-btn" data-action="copy" data-code-id="${codeId}" title="复制代码">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-          </svg>
-          <span>复制</span>
-        </button>
-        <button class="code-action-btn" data-action="download" data-code-id="${codeId}" data-language="${langName || 'code'}" title="下载代码">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-          </svg>
-          <span>下载</span>
-        </button>
-      </div>
-    </div>
-  `
-  
-  return `
-    <div class="code-block-container">
-      ${toolbar}
-      <pre class="hljs"><code id="${codeId}" class="hljs language-${langName}">${highlighted}</code></pre>
-    </div>
-  `
-}
-
-// 自定义列表项渲染规则，确保列表项内容不换行
-md.renderer.rules.list_item_open = (tokens, idx) => {
-  return '<li>'
-}
-
-md.renderer.rules.list_item_close = (tokens, idx) => {
-  return '</li>'
-}
-
-// 自定义段落渲染规则，在列表项中的段落不换行
-md.renderer.rules.paragraph_open = (tokens, idx, options, env, renderer) => {
-  // 检查是否在列表项中
-  const parentTokens = tokens.slice(0, idx).reverse()
-  const isInListItem = parentTokens.some(token => token.type === 'list_item_open')
-  
-  if (isInListItem) {
-    return '<span style="display: inline;">'
-  }
-  return '<p>'
-}
-
-md.renderer.rules.paragraph_close = (tokens, idx, options, env, renderer) => {
-  // 检查是否在列表项中
-  const parentTokens = tokens.slice(0, idx).reverse()
-  const isInListItem = parentTokens.some(token => token.type === 'list_item_open')
-  
-  if (isInListItem) {
-    return '</span>'
-  }
-  return '</p>'
 }
 
 // 简单的语言检测函数
@@ -199,65 +207,55 @@ function detectLanguage(code: string): string | null {
   return null
 }
 
-const renderedContent = computed(() => {
-  if (!props.content) return ''
-  
-  // 处理HTML实体解码
-  let content = props.content
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
-  
-  return md.render(content)
-})
-
-// 事件处理函数
-const handleCodeAction = (event: Event) => {
-  const target = event.target as HTMLElement
-  const button = target.closest('.code-action-btn') as HTMLButtonElement
-  
-  if (button) {
-    const action = button.dataset.action
-    const codeId = button.dataset.codeId
-    const language = button.dataset.language
-    
-    if (action === 'copy' && codeId) {
+// 添加全局复制函数
+if (typeof window !== 'undefined') {
+  (window as any).copyCode = async (codeId: string) => {
+    try {
       const codeElement = document.getElementById(codeId)
       if (codeElement) {
-        const text = codeElement.textContent || ''
-        navigator.clipboard.writeText(text).then(() => {
-          console.log('代码已复制到剪贴板')
-        }).catch(err => {
-          console.error('复制失败:', err)
-        })
+        await navigator.clipboard.writeText(codeElement.textContent || '')
+        // 可以添加成功提示
+        const button = codeElement.closest('.code-block-container')?.querySelector('.copy-button')
+        if (button) {
+          const originalHTML = button.innerHTML
+          button.innerHTML = '✓'
+          button.style.color = '#10b981'
+          setTimeout(() => {
+            button.innerHTML = originalHTML
+            button.style.color = ''
+          }, 2000)
+        }
       }
-    } else if (action === 'download' && codeId && language) {
-      const codeElement = document.getElementById(codeId)
-      if (codeElement) {
-        const text = codeElement.textContent || ''
-        const blob = new Blob([text], { type: 'text/plain' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `code.${getFileExtension(language)}`
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        URL.revokeObjectURL(url)
-      }
+    } catch (err) {
+      console.error('复制失败:', err)
     }
   }
 }
 
-// 生命周期钩子
-onMounted(() => {
-  document.addEventListener('click', handleCodeAction)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('click', handleCodeAction)
+const renderedContent = computed(() => {
+  if (!props.content) return ''
+  
+  // 预处理内容，处理HTML标签和数学公式
+  let content = props.content
+    // 移除可能干扰数学公式的HTML标签
+    .replace(/<br[^>]*>/g, ' ') // 将<br>替换为空格
+    .replace(/<br\s*\/>/g, ' ') // 处理自闭合<br/>
+    .replace(/&nbsp;/g, ' ') // 替换不间断空格
+    // 处理数学公式中的特殊字符
+    .replace(/\\cdotp/g, '/')
+    // 临时保护数学公式中的特殊符号
+    .replace(/\$(.*?)\$/g, (match, formula) => {
+      // 移除公式内的HTML标签
+      const cleanFormula = formula.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ')
+      return `$${cleanFormula}$`
+    })
+    .replace(/\$\$(.*?)\$\$/g, (match, formula) => {
+      // 移除公式内的HTML标签
+      const cleanFormula = formula.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ')
+      return `$$${cleanFormula}$$`
+    })
+  
+  return md.render(content)
 })
 
 // 文件扩展名映射
@@ -269,7 +267,20 @@ const getFileExtension = (language: string): string => {
     'java': 'java',
     'cpp': 'cpp',
     'c': 'c',
-    'csharp': 'cs',
+    'css': 'css',
+    'html': 'html',
+    'xml': 'xml',
+    'json': 'json',
+    'yaml': 'yml',
+    'yml': 'yml',
+    'sql': 'sql',
+    'sh': 'sh',
+    'bash': 'sh',
+    'powershell': 'ps1',
+    'dockerfile': 'dockerfile',
+    'markdown': 'md',
+    'tex': 'tex',
+    'latex': 'tex',
     'php': 'php',
     'ruby': 'rb',
     'go': 'go',
@@ -277,30 +288,13 @@ const getFileExtension = (language: string): string => {
     'swift': 'swift',
     'kotlin': 'kt',
     'scala': 'scala',
-    'html': 'html',
-    'css': 'css',
-    'scss': 'scss',
-    'sass': 'sass',
-    'less': 'less',
-    'json': 'json',
-    'xml': 'xml',
-    'yaml': 'yaml',
-    'yml': 'yml',
-    'toml': 'toml',
-    'sql': 'sql',
-    'bash': 'sh',
-    'shell': 'sh',
-    'powershell': 'ps1',
-    'dockerfile': 'dockerfile',
-    'markdown': 'md',
-    'tex': 'tex',
     'r': 'r',
     'matlab': 'm',
     'lua': 'lua',
     'perl': 'pl',
     'dart': 'dart'
   }
-  return extensions[language.toLowerCase()] || 'txt'
+  return extensions[language.toLowerCase()] || language
 }
 </script>
 
@@ -310,6 +304,7 @@ const getFileExtension = (language: string): string => {
   color: #1f2937;
 }
 
+/* 标题样式 */
 .markdownit-content :deep(h1),
 .markdownit-content :deep(h2),
 .markdownit-content :deep(h3),
@@ -329,11 +324,13 @@ const getFileExtension = (language: string): string => {
 .markdownit-content :deep(h5) { font-size: 1.1em; }
 .markdownit-content :deep(h6) { font-size: 1em; }
 
+/* 段落样式 */
 .markdownit-content :deep(p) {
   margin: 0.8em 0;
   line-height: 1.6;
 }
 
+/* 列表样式 */
 .markdownit-content :deep(ul),
 .markdownit-content :deep(ol) {
   margin: 0.8em 0;
@@ -353,16 +350,6 @@ const getFileExtension = (language: string): string => {
   line-height: 1.6;
 }
 
-.markdownit-content :deep(li p:first-child) {
-  display: inline;
-  margin: 0;
-}
-
-.markdownit-content :deep(li p:not(:first-child)) {
-  display: block;
-  margin: 0.5em 0;
-}
-
 /* 嵌套列表样式 */
 .markdownit-content :deep(ul ul),
 .markdownit-content :deep(ol ol),
@@ -378,6 +365,17 @@ const getFileExtension = (language: string): string => {
 
 .markdownit-content :deep(ul ul ul) {
   list-style-type: square;
+}
+
+/* 列表项中的段落样式 */
+.markdownit-content :deep(li p:first-child) {
+  display: inline;
+  margin: 0;
+}
+
+.markdownit-content :deep(li p:not(:first-child)) {
+  display: block;
+  margin: 0.5em 0;
 }
 
 /* 行内代码样式 */
@@ -396,73 +394,53 @@ const getFileExtension = (language: string): string => {
   border: 1px solid #d0d7de;
   border-radius: 8px;
   overflow: hidden;
-  background: #f6f8fa;
+  background-color: #f6f8fa;
 }
 
-/* 代码块工具栏样式 */
+/* 代码工具栏样式 */
 .markdownit-content :deep(.code-toolbar) {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 4px 12px;
-  background: #f1f3f4;
+  padding: 8px 16px;
+  background-color: #f1f5f9;
   border-bottom: 1px solid #d0d7de;
-  font-size: 11px;
-  height: 28px;
+  font-size: 0.85em;
 }
 
 .markdownit-content :deep(.code-language) {
-  color: #57606a;
+  color: #656d76;
   font-weight: 500;
   text-transform: uppercase;
-  font-size: 10px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
 }
 
-.markdownit-content :deep(.code-actions) {
-  display: flex;
-  gap: 4px;
-}
-
-.markdownit-content :deep(.code-action-btn) {
+.markdownit-content :deep(.copy-button) {
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 2px 6px;
+  gap: 4px;
+  padding: 4px 8px;
+  background: none;
   border: 1px solid #d0d7de;
-  border-radius: 3px;
-  background: white;
-  color: #57606a;
-  font-size: 9px;
+  border-radius: 4px;
+  color: #656d76;
   cursor: pointer;
+  font-size: 0.85em;
   transition: all 0.2s ease;
-  height: 20px;
-  min-width: 0;
 }
 
-.markdownit-content :deep(.code-action-btn:hover) {
-  background: #f3f4f6;
+.markdownit-content :deep(.copy-button:hover) {
+  background-color: #f3f4f6;
   border-color: #9ca3af;
-  color: #24292f;
-}
-
-.markdownit-content :deep(.code-action-btn svg) {
-  flex-shrink: 0;
-  width: 12px;
-  height: 12px;
-}
-
-.markdownit-content :deep(.code-action-btn span) {
-  display: none;
+  color: #374151;
 }
 
 /* 代码块样式 */
 .markdownit-content :deep(pre) {
-  background-color: #f6f8fa;
-  border: none;
-  border-radius: 0;
+  margin: 0;
   padding: 16px;
   overflow-x: auto;
-  margin: 0;
+  background-color: #f6f8fa;
 }
 
 .markdownit-content :deep(pre code) {
@@ -483,64 +461,6 @@ const getFileExtension = (language: string): string => {
   font-size: 0.9em;
   color: #1f2937;
   display: inline;
-}
-
-/* 代码高亮颜色 */
-.markdownit-content :deep(code.hljs .hljs-comment),
-.markdownit-content :deep(code.hljs .hljs-quote) {
-  color: #6b7280;
-  font-style: italic;
-}
-
-.markdownit-content :deep(code.hljs .hljs-keyword),
-.markdownit-content :deep(code.hljs .hljs-selector-tag),
-.markdownit-content :deep(code.hljs .hljs-subst) {
-  color: #0000ff;
-  font-weight: bold;
-}
-
-.markdownit-content :deep(code.hljs .hljs-number),
-.markdownit-content :deep(code.hljs .hljs-literal) {
-  color: #098658;
-}
-
-.markdownit-content :deep(code.hljs .hljs-variable),
-.markdownit-content :deep(code.hljs .hljs-template-variable) {
-  color: #001080;
-}
-
-.markdownit-content :deep(code.hljs .hljs-string),
-.markdownit-content :deep(code.hljs .hljs-doctag) {
-  color: #a31515;
-}
-
-.markdownit-content :deep(code.hljs .hljs-title),
-.markdownit-content :deep(code.hljs .hljs-section),
-.markdownit-content :deep(code.hljs .hljs-selector-id) {
-  color: #7c3aed;
-  font-weight: bold;
-}
-
-.markdownit-content :deep(code.hljs .hljs-type),
-.markdownit-content :deep(code.hljs .hljs-class .hljs-title) {
-  color: #267f99;
-}
-
-.markdownit-content :deep(code.hljs .hljs-tag),
-.markdownit-content :deep(code.hljs .hljs-name) {
-  color: #800000;
-}
-
-.markdownit-content :deep(code.hljs .hljs-attribute) {
-  color: #0451a5;
-}
-
-.markdownit-content :deep(code.hljs .hljs-function) {
-  color: #795e26;
-}
-
-.markdownit-content :deep(code.hljs .hljs-params) {
-  color: #001080;
 }
 
 /* 任务列表样式 */
@@ -606,7 +526,7 @@ const getFileExtension = (language: string): string => {
 .markdownit-content :deep(hr) {
   border: none;
   border-top: 1px solid #d0d7de;
-  margin: 1em 0;
+  margin: 2em 0;
 }
 
 /* 图片样式 */
@@ -639,5 +559,19 @@ const getFileExtension = (language: string): string => {
 .markdownit-content :deep(.hljs) {
   background: #f6f8fa !important;
   color: #1f2937 !important;
+}
+
+/* 数学公式样式 */
+.markdownit-content :deep(.katex) {
+  font-size: 1.1em;
+}
+
+.markdownit-content :deep(.katex-display) {
+  margin: 1em 0;
+  text-align: center;
+}
+
+.markdownit-content :deep(.katex-error) {
+  color: #ff4757;
 }
 </style>

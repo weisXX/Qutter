@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数学公式测试</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it@14.1.0/dist/markdown-it.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it-texmath@1.0.0/dist/texmath.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .test-section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .test-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
+        }
+        .test-content {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .rendered-content {
+            background: white;
+            padding: 15px;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>数学公式渲染测试</h1>
+    
+    <div class="test-section">
+        <div class="test-title">测试 1: 行内公式</div>
+        <div class="test-content">
+            输入: $\frac{d}{dx}\Bigl(\int_{a}^{x} f(t)\,dt\Bigr)=f(x)$
+        </div>
+        <div class="rendered-content" id="test1"></div>
+    </div>
+    
+    <div class="test-section">
+        <div class="test-title">测试 2: 块级公式</div>
+        <div class="test-content">
+            输入: $$\int_{-\infty}^{\infty} e^{-x^2} dx = \sqrt{\pi}$$
+        </div>
+        <div class="rendered-content" id="test2"></div>
+    </div>
+    
+    <div class="test-section">
+        <div class="test-title">测试 3: 复杂公式</div>
+        <div class="test-content">
+            输入: $$\sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}$$
+        </div>
+        <div class="rendered-content" id="test3"></div>
+    </div>
+
+    <script>
+        // 初始化 markdown-it
+        const md = new markdownit({
+            html: true,
+            linkify: true,
+            typographer: true,
+            breaks: true
+        });
+        
+        // 添加数学公式支持
+        md.use(texmath, {
+            engine: katex,
+            delimiters: 'dollars',
+            katexOptions: {
+                throwOnError: false,
+                errorColor: '#cc0000'
+            }
+        });
+        
+        // 测试用例
+        const tests = [
+            { id: 'test1', content: '行内公式: $\\frac{d}{dx}\\Bigl(\\int_{a}^{x} f(t)\\,dt\\Bigr)=f(x)$' },
+            { id: 'test2', content: '块级公式:\n\n$$\\int_{-\\infty}^{\\infty} e^{-x^2} dx = \\sqrt{\\pi}$$' },
+            { id: 'test3', content: '复杂公式:\n\n$$\\sum_{n=1}^{\\infty} \\frac{1}{n^2} = \\frac{\\pi^2}{6}$$' }
+        ];
+        
+        // 渲染测试
+        tests.forEach(test => {
+            const element = document.getElementById(test.id);
+            if (element) {
+                element.innerHTML = md.render(test.content);
+            }
+        });
+    </script>
+</body>
+</html>

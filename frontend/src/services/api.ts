@@ -127,6 +127,96 @@ export const askQuestionStream = async (
   }
 }
 
+export const askQuestionStreamWithFiles = async (
+  question: string,
+  files: File[],
+  onChunk: (chunk: string) => void,
+  model?: string,
+  sessionId?: string
+): Promise<void> => {
+  try {
+    const formData = new FormData()
+    formData.append('question', question)
+    formData.append('model', model || 'gpt-oss:120b-cloud')
+    if (sessionId) {
+      formData.append('sessionId', sessionId)
+    }
+    
+    // 添加文件
+    files.forEach(file => {
+      formData.append('files', file)
+    })
+
+    const response = await fetch(`${API_BASE_URL}/ask-stream-with-files`, {
+      method: 'POST',
+      body: formData
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.error || '请求失败')
+    }
+
+    const reader = response.body?.getReader()
+    const decoder = new TextDecoder()
+
+    if (!reader) {
+      throw new Error('无法读取响应流')
+    }
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      const chunk = decoder.decode(value, { stream: true })
+      const lines = chunk.split('\n')
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6)
+          if (data === '[DONE]') return
+          
+          try {
+            const parsed = JSON.parse(data)
+            if (parsed.content) {
+              onChunk(parsed.content)
+            }
+          } catch (e) {
+            // 忽略解析错误
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('带文件的流式提问失败:', error)
+    throw error
+  }
+}
+
+export const uploadFiles = async (files: File[]) => {
+  try {
+    const formData = new FormData()
+    files.forEach(file => {
+      formData.append('files', file)
+    })
+
+    const response = await api.post('/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+
+    return response.data
+  } catch (error) {
+    console.error('文件上传失败:', error)
+    if (axios.isAxiosError(error)) {
+      const errorMessage = error.response?.data?.error || '文件上传失败'
+      throw new Error(errorMessage)
+    }
+    throw error
+  }
+}
+
 export const askQuestion = async (question: string, model?: string, sessionId?: string): Promise<AskResponse> => {
   try {
     const response = await api.post('/ask', {

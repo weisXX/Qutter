@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>KaTeX Test</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+</head>
+<body>
+  <h1>KaTeX Test</h1>
+  <div id="math1"></div>
+  <div id="math2"></div>
+  <div id="math3"></div>
+  
+  <script>
+    katex.render("f(x)=ax+b", math1, {
+      throwOnError: false
+    });
+    
+    katex.render("\\frac{d}{dx}\\bigl(\\int_{a}^{x} f(t)dt\\bigr)=f(x)", math2, {
+      throwOnError: false
+    });
+    
+    katex.render("\\displaystyle \\frac{d}{dx}\\bigl(\\int_{a}^{x} f(t)dt\\bigr)=f(x)", math3, {
+      throwOnError: false,
+      displayMode: true
+    });
+  </script>
+</body>
+</html>

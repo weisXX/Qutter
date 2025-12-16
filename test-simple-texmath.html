@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>简单测试 markdown-it-texmath</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .test-case {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .input {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 3px;
+            margin-bottom: 10px;
+            font-family: monospace;
+        }
+        .output {
+            background: #e8f4f8;
+            padding: 10px;
+            border-radius: 3px;
+            margin-bottom: 10px;
+        }
+        .raw {
+            background: #f8e8e8;
+            padding: 10px;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 12px;
+            overflow-x: auto;
+        }
+        h3 {
+            margin-top: 0;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <h1>简单测试 markdown-it-texmath</h1>
+    
+    <div class="test-case">
+        <h3>测试1: 简单的 \text{}</h3>
+        <div class="input">
+            <strong>输入:</strong> $\text{hello world}$
+        </div>
+        <div class="output">
+            <strong>渲染结果:</strong> <span id="output1"></span>
+        </div>
+        <div class="raw">
+            <strong>原始HTML:</strong> <span id="raw1"></span>
+        </div>
+    </div>
+    
+    <div class="test-case">
+        <h3>测试2: 带换行符的块级公式</h3>
+        <div class="input">
+            <strong>输入:</strong> \[<br>f(x) = x^2<br>\]
+        </div>
+        <div class="output">
+            <strong>渲染结果:</strong> <span id="output2"></span>
+        </div>
+        <div class="raw">
+            <strong>原始HTML:</strong> <span id="raw2"></span>
+        </div>
+    </div>
+    
+    <div class="test-case">
+        <h3>测试3: 测试预处理逻辑</h3>
+        <div class="input">
+            <strong>输入:</strong> $\text{test}$ 然后换行<br>继续
+        </div>
+        <div class="output">
+            <strong>渲染结果:</strong> <span id="output3"></span>
+        </div>
+        <div class="raw">
+            <strong>原始HTML:</strong> <span id="raw3"></span>
+        </div>
+    </div>
+    
+    <div class="test-case">
+        <h3>测试4: 测试 markdown-it 的 breaks 选项</h3>
+        <div class="input">
+            <strong>输入:</strong> 第一行<br>第二行
+        </div>
+        <div class="output">
+            <strong>渲染结果:</strong> <span id="output4"></span>
+        </div>
+        <div class="raw">
+            <strong>原始HTML:</strong> <span id="raw4"></span>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it@14.1.0/dist/markdown-it.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it-texmath@1.0.0/dist/markdown-it-texmath.min.js"></script>
+    
+    <script>
+        // 创建 markdown-it 实例，模拟 EnhancedMarkdownRenderer.vue 的配置
+        const md = window.markdownit({
+            html: true,
+            linkify: true,
+            typographer: true,
+            breaks: true  // 注意：这是关键配置
+        });
+        
+        // 使用 markdown-it-texmath
+        md.use(window.markdownitTexmath, {
+            engine: window.katex,
+            delimiters: ['dollars', 'brackets'],
+            katexOptions: {
+                throwOnError: false,
+                errorColor: '#cc0000',
+                strict: false
+            }
+        });
+        
+        // 模拟 EnhancedMarkdownRenderer.vue 中的预处理逻辑
+        function preprocessContent(content) {
+            return content
+                // 先移除所有换行标签，包括在方括号之间的
+                .replace(/\[<br[^>]*>/g, '[') // [ 后面的<br>
+                .replace(/<br[^>]*>\]/g, ']') // ] 前面的<br>
+                .replace(/\[<br\s*\/>/g, '[') // [ 后面的<br/>
+                .replace(/<br\s*\/>\]/g, ']') // ] 前面的<br/>
+                // 处理 [<br /> 和 <br />] 的情况
+                .replace(/\[<br\s*\/\s*>/g, '[') // [ 后面的<br />
+                .replace(/<br\s*\/\s*>\]/g, ']') // ] 前面的<br />
+                // 移除其他可能干扰数学公式的HTML标签
+                .replace(/<br[^>]*>/g, ' ') // 将<br>替换为空格
+                .replace(/<br\s*\/>/g, ' ') // 处理自闭合<br/>
+                .replace(/<br\s*\/\s*>/g, ' ') // 处理自闭合<br />
+                .replace(/&nbsp;/g, ' ') // 替换不间断空格
+                // 不再对数学公式中的特殊命令进行不必要的转义处理
+                .replace(/\$\$(.*?)\$\$/g, (match, formula) => {
+                    // 移除公式内的HTML标签，包括换行标签
+                    const cleanFormula = formula
+                        .replace(/\[<br[^>]*>/g, '[')
+                        .replace(/<br[^>]*>\]/g, ']')
+                        .replace(/\[<br\s*\/>/g, '[')
+                        .replace(/<br\s*\/>\]/g, ']')
+                        .replace(/\[<br\s*\/\s*>/g, '[')
+                        .replace(/<br\s*\/\s*>\]/g, ']')
+                        .replace(/<[^>]*>/g, '') // 移除其他HTML标签
+                        .replace(/&nbsp;/g, ' ')
+                    return `$${cleanFormula}$`
+                });
+        }
+        
+        // 测试用例
+        const testCases = [
+            {
+                id: 'output1',
+                rawId: 'raw1',
+                input: '$\\text{hello world}$',
+                preprocess: false
+            },
+            {
+                id: 'output2',
+                rawId: 'raw2',
+                input: '\\[<br>f(x) = x^2<br>\\]',
+                preprocess: true
+            },
+            {
+                id: 'output3',
+                rawId: 'raw3',
+                input: '$\\text{test}$ 然后换行<br>继续',
+                preprocess: true
+            },
+            {
+                id: 'output4',
+                rawId: 'raw4',
+                input: '第一行<br>第二行',
+                preprocess: true
+            }
+        ];
+        
+        // 渲染所有测试用例
+        testCases.forEach(testCase => {
+            try {
+                const content = testCase.preprocess ? preprocessContent(testCase.input) : testCase.input;
+                const output = md.render(content);
+                document.getElementById(testCase.id).innerHTML = output;
+                document.getElementById(testCase.rawId).textContent = output;
+            } catch (error) {
+                document.getElementById(testCase.id).innerHTML = 
+                    `<span style="color: red">错误: ${error.message}</span>`;
+                document.getElementById(testCase.rawId).textContent = `错误: ${error.message}`;
+            }
+        });
+        
+        // 添加调试信息
+        console.log('markdown-it 配置:', md.options);
+        console.log('测试用例:', testCases);
+    </script>
+</body>
+</html>

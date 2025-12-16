@@ -3,7 +3,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { marked } from 'marked'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
@@ -18,7 +18,7 @@ const props = defineProps<Props>()
 const renderer = new marked.Renderer()
 
 // 自定义列表项渲染，确保列表项内容不换行
-renderer.listitem = (text: string) => {
+renderer.listitem = (text: string): string => {
   // 将段落标签替换为span
   const processedText = text.replace(/<p>/g, '<span style="display: inline;">').replace(/<\/p>/g, '</span>')
   return `<li>${processedText}</li>`
@@ -47,6 +47,93 @@ marked.setOptions({
   langPrefix: 'hljs language-', // 语言前缀
 })
 
+// const renderedContent = computed(() => {
+//   if (!props.content) return ''
+  
+//   // 预处理内容，处理HTML标签和数学公式
+//   let content = props.content
+//     // 先处理HTML实体解码，避免marked重复转义
+//     .replace(/&amp;/g, '&')
+//     .replace(/&lt;/g, '<')
+//     .replace(/&gt;/g, '>')
+//     .replace(/&quot;/g, '"')
+//     .replace(/&#39;/g, "'")
+//     // 先移除所有换行标签，包括在方括号之间的
+//     .replace(/\[<br[^>]*>/g, '[') // [ 后面的<br>
+//     .replace(/<br[^>]*>\]/g, ']') // ] 前面的<br>
+//     .replace(/\[<br\s*\/>/g, '[') // [ 后面的<br/>
+//     .replace(/<br\s*\/>\]/g, ']') // ] 前面的<br/>
+//     // 处理 [<br /> 和 <br />] 的情况
+//     .replace(/\[<br\s*\/\s*>/g, '[') // [ 后面的<br />
+//     .replace(/<br\s*\/\s*>\]/g, ']') // ] 前面的<br />
+//     // 移除其他可能干扰数学公式的HTML标签
+//     .replace(/<br[^>]*>/g, ' ') // 将<br>替换为空格
+//     .replace(/<br\s*\/>/g, ' ') // 处理自闭合<br/>
+//     .replace(/<br\s*\/\s*>/g, ' ') // 处理自闭合<br />
+//     .replace(/&nbsp;/g, ' ') // 替换不间断空格
+//     // 处理数学公式中的特殊字符
+//     .replace(/\\cdotp/g, '/')
+//     // 临时保护数学公式中的特殊符号
+//     .replace(/\$(.*?)\$/g, (match, formula) => {
+//       // 移除公式内的HTML标签，包括换行标签
+//       const cleanFormula = formula
+//         .replace(/\[<br[^>]*>/g, '[')
+//         .replace(/<br[^>]*>\]/g, ']')
+//         .replace(/\[<br\s*\/>/g, '[')
+//         .replace(/<br\s*\/>\]/g, ']')
+//         .replace(/\[<br\s*\/\s*>/g, '[')
+//         .replace(/<br\s*\/\s*>\]/g, ']')
+//         .replace(/<[^>]*>/g, '') // 移除其他HTML标签
+//         .replace(/&nbsp;/g, ' ')
+//       return `${cleanFormula}<template>
+//   <div class="marked-content" v-html="renderedContent"></div>
+// </template>
+
+// <script setup lang="ts">
+// import { computed } from 'vue'
+// import { marked } from 'marked'
+// import hljs from 'highlight.js'
+// import 'highlight.js/styles/github.css'
+
+// interface Props {
+//   content: string
+// }
+
+// const props = defineProps<Props>()
+
+// // 创建自定义渲染器
+// const renderer = new marked.Renderer()
+
+// // 自定义列表项渲染，确保列表项内容不换行
+// renderer.listitem = (text: string): string => {
+//   // 将段落标签替换为span
+//   const processedText = text.replace(/<p>/g, '<span style="display: inline;">').replace(/<\/p>/g, '</span>')
+//   return `<li>${processedText}</li>`
+// }
+
+// // 配置marked选项
+// marked.setOptions({
+//   renderer: renderer, // 使用自定义渲染器
+//   highlight: (code: string, lang: string) => {
+//     if (lang && hljs.getLanguage(lang)) {
+//       try {
+//         return hljs.highlight(code, { language: lang }).value
+//       } catch (err) {
+//         console.warn('代码高亮失败:', err)
+//       }
+//     }
+//     return hljs.highlightAuto(code).value
+//   },
+//   breaks: true, // 支持换行
+//   gfm: true, // GitHub风格markdown
+//   headerIds: false, // 禁用自动生成header ID
+//   mangle: false, // 禁用邮箱地址混淆
+//   sanitize: false, // 允许HTML（因为我们使用v-html）
+//   smartLists: true, // 智能列表
+//   smartypants: true, // 智能标点
+//   langPrefix: 'hljs language-', // 语言前缀
+// })
+
 const renderedContent = computed(() => {
   if (!props.content) return ''
   
@@ -58,125 +145,40 @@ const renderedContent = computed(() => {
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    // 移除可能干扰数学公式的HTML标签
+    // 先移除所有换行标签，包括在方括号之间的
+    .replace(/\[<br[^>]*>/g, '[') // [ 后面的<br>
+    .replace(/<br[^>]*>\]/g, ']') // ] 前面的<br>
+    .replace(/\[<br\s*\/>/g, '[') // [ 后面的<br/>
+    .replace(/<br\s*\/>\]/g, ']') // ] 前面的<br/>
+    // 处理 [<br /> 和 <br />] 的情况
+    .replace(/\[<br\s*\/\s*>/g, '[') // [ 后面的<br />
+    .replace(/<br\s*\/\s*>\]/g, ']') // ] 前面的<br />
+    // 移除其他可能干扰数学公式的HTML标签
     .replace(/<br[^>]*>/g, ' ') // 将<br>替换为空格
     .replace(/<br\s*\/>/g, ' ') // 处理自闭合<br/>
+    .replace(/<br\s*\/\s*>/g, ' ') // 处理自闭合<br />
     .replace(/&nbsp;/g, ' ') // 替换不间断空格
     // 处理数学公式中的特殊字符
     .replace(/\\cdotp/g, '/')
     // 临时保护数学公式中的特殊符号
-    .replace(/\$(.*?)\$/g, (match, formula) => {
-      // 移除公式内的HTML标签
-      const cleanFormula = formula.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ')
+    
+  
+    .replace(/\$\$(.*?)\$\$/g, (match, formula) => {
+      // 移除公式内的HTML标签，包括换行标签
+      const cleanFormula = formula
+        .replace(/\[<br[^>]*>/g, '[')
+        .replace(/<br[^>]*>\]/g, ']')
+        .replace(/\[<br\s*\/>/g, '[')
+        .replace(/<br\s*\/>\]/g, ']')
+        .replace(/\[<br\s*\/\s*>/g, '[')
+        .replace(/<br\s*\/\s*>\]/g, ']')
+        .replace(/<[^>]*>/g, '') // 移除其他HTML标签
+        .replace(/&nbsp;/g, ' ')
       return `$${cleanFormula}$`
     })
-    .replace(/\$\$(.*?)\$\$/g, (match, formula) => {
-      // 移除公式内的HTML标签
-      const cleanFormula = formula.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ')
-      return `$$${cleanFormula}$$`
-    })
   
-  // 使用marked解析Markdown
-  let html = marked(content)
-  
-  // 先处理代码块，确保它们不被行内代码处理影响
-  html = html.replace(/<pre><code class="hljs language-(.*?)">(.*?)<\/code><\/pre>/gs, (match, lang, code) => {
-    // 解码HTML实体
-    const decodedCode = code
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&amp;/g, '&')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-    
-    // 重新高亮
-    try {
-      if (lang && hljs.getLanguage(lang)) {
-        const highlighted = hljs.highlight(decodedCode, { language: lang }).value
-        return `<pre><code class="hljs language-${lang}">${highlighted}</code></pre>`
-      }
-    } catch (err) {
-      console.warn('代码块高亮失败:', err)
-    }
-    
-    // 如果高亮失败，返回原始代码
-    return `<pre><code class="hljs language-${lang}">${decodedCode}</code></pre>`
-  })
-  
-  // 处理行内代码语言检测
-  html = html.replace(/<code class="hljs">(.*?)<\/code>/g, (match, code) => {
-    // 解码HTML实体
-    const decodedCode = code
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&amp;/g, '&')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-    
-    // 尝试检测语言
-    const detectedLang = detectLanguage(decodedCode.trim())
-    
-    if (detectedLang && hljs.getLanguage(detectedLang)) {
-      try {
-        const highlighted = hljs.highlight(decodedCode, { language: detectedLang }).value
-        return `<code class="hljs language-${detectedLang}">${highlighted}</code>`
-      } catch (err) {
-        console.warn('行内代码高亮失败:', err)
-      }
-    }
-    
-    // 如果无法检测语言，使用自动检测
-    try {
-      const highlighted = hljs.highlightAuto(decodedCode).value
-      return `<code class="hljs">${highlighted}</code>`
-    } catch (err) {
-      console.warn('行内代码自动高亮失败:', err)
-      return `<code>${decodedCode}</code>`
-    }
-  })
-  
-  return html
+  return marked.parse(content)
 })
-
-// 简单的语言检测函数
-function detectLanguage(code: string): string | null {
-  // JavaScript 检测
-  if (/function\s+\w+|const\s+\w+\s*=|let\s+\w+\s*=|var\s+\w+\s*=|=>|\{.*\}|\[\]|\.\w+|console\.|require\(|import\s+/.test(code)) {
-    return 'javascript'
-  }
-  
-  // Java 检测
-  if (/public\s+class|private\s+\w+\s+\w+|public\s+static\s+void|System\.out\.println|String\[\]\s+args|new\s+\w+\(\)|@Override/.test(code)) {
-    return 'java'
-  }
-  
-  // Python 检测
-  if (/def\s+\w+|import\s+\w+|from\s+\w+\s+import|print\(|if\s+__name__\s*==\s*['"]__main__['"]|:\s*\n/.test(code)) {
-    return 'python'
-  }
-  
-  // CSS 检测
-  if (/\{\s*[\w-]+:\s*[^}]+\}|\.[\w-]+\s*\{|#[\w-]+\s*\{|@media|@import/.test(code)) {
-    return 'css'
-  }
-  
-  // HTML 检测
-  if (/&lt;\/?\w+[^&gt;]*&gt;|&lt;div|&lt;span|&lt;p|&lt;h[1-6]|class=|id=/.test(code)) {
-    return 'html'
-  }
-  
-  // SQL 检测
-  if (/SELECT\s+.*\s+FROM|INSERT\s+INTO|UPDATE\s+.*\s+SET|DELETE\s+FROM|CREATE\s+TABLE|DROP\s+TABLE/i.test(code)) {
-    return 'sql'
-  }
-  
-  // JSON 检测
-  if (/^\s*\{.*\}\s*$|^\s*\[.*\]\s*$/.test(code) && code.includes(':') && (code.includes('"') || code.includes("'"))) {
-    return 'json'
-  }
-  
-  return null
-}
 </script>
 
 <style scoped>

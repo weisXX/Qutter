@@ -18,7 +18,7 @@ interface Props {
 }
 
 const props = defineProps<Props>()
-
+console.log('[[[[[[[[[[[[[[[[[[1111]]]]]]]]]]]]]]]]]]')
 // 创建markdown-it实例
 const md = new MarkdownIt({
   html: true,        // 允许HTML标签
@@ -68,11 +68,11 @@ md.use(markdownItTexmath, {
 })
 
 // 自定义列表项渲染规则，确保列表项内容不换行
-md.renderer.rules.list_item_open = (tokens: any, idx: number) => {
+md.renderer.rules.list_item_open = (tokens: any, idx: number): string => {
   return '<li>'
 }
 
-md.renderer.rules.list_item_close = (tokens: any, idx: number) => {
+md.renderer.rules.list_item_close = (tokens: any, idx: number): string => {
   return '</li>'
 }
 
@@ -100,7 +100,7 @@ md.renderer.rules.paragraph_close = (tokens: any, idx: number, options: any, env
 }
 
 // 自定义渲染规则，处理行内代码
-md.renderer.rules.code_inline = (tokens: any, idx: number) => {
+md.renderer.rules.code_inline = (tokens: any, idx: number): string => {
   const token = tokens[idx]
   const code = token.content
   
@@ -177,23 +177,80 @@ const renderedContent = computed(() => {
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    // 移除可能干扰数学公式的HTML标签
-    .replace(/<br[^>]*>/g, ' ') // 将<br>替换为空格
-    .replace(/<br\s*\/>/g, ' ') // 处理自闭合<br/>
-    .replace(/&nbsp;/g, ' ') // 替换不间断空格
-    // 处理数学公式中的特殊字符
-    .replace(/\\cdotp/g, '/')
-    // 临时保护数学公式中的特殊符号
+    // 新增：处理被<br>标签打断的方括号内容
+    // 匹配形如 [<br>内容<br>] 的模式，并将其重构为 [$内容$]
+    .replace(/(\[)(?:<br\s*\/?>\s*)+(.*?)(?:<br\s*\/?>\s*)+(\])/gs, (match, openingBracket, middle, closingBracket) => {
+      // 移除中间内容中的所有HTML标签和多余空白
+      const cleanMiddle = middle
+        .replace(/<[^>]*>/g, '') // 移除所有HTML标签
+        .replace(/\s+/g, ' ') // 合并多个空白字符为单个空格
+        .trim();
+      return `[$${cleanMiddle}$]`;
+    })
+    // 处理行内公式 $...$
     .replace(/\$(.*?)\$/g, (match, formula) => {
-      // 移除公式内的HTML标签
-      const cleanFormula = formula.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ')
-      return `$${cleanFormula}$`
+      // 移除公式内的HTML标签，特别是<br>标签
+      const cleanFormula = formula
+        .replace(/<br[^>]*>/g, ' ') // 移除<br>标签
+        .replace(/<br\s*\/>/g, ' ') // 处理自闭合<br/>标签
+        .replace(/<br\s*\/\s*>/g, ' ') // 处理自闭合<br />标签
+        .replace(/\[([^\]]*?)\]/g, (match, inside) => {
+          // 处理方括号内的内容，移除其中的<br>标签
+          return `[${inside.replace(/<br[^>]*>/g, ' ').replace(/<br\s*\/>/g, ' ').replace(/<br\s*\/\s*>/g, ' ')}]`;
+        })
+        .replace(/<[^>]*>/g, '') // 移除其他HTML标签
+        .replace(/&nbsp;/g, ' ')
+        .trim();
+      return `$${cleanFormula}$`;
     })
-    .replace(/\$\$(.*?)\$\$/g, (match, formula) => {
-      // 移除公式内的HTML标签
-      const cleanFormula = formula.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ')
-      return `$$${cleanFormula}$$`
+    // 处理块级公式 $$...$$
+    .replace(/\$\$(.*?)\$\$/gs, (match, formula) => {
+      // 移除公式内的HTML标签，特别是<br>标签
+      const cleanFormula = formula
+        .replace(/<br[^>]*>/g, ' ') // 移除<br>标签
+        .replace(/<br\s*\/>/g, ' ') // 处理自闭合<br/>标签
+        .replace(/<br\s*\/\s*>/g, ' ') // 处理自闭合<br />标签
+        .replace(/\[([^\]]*?)\]/g, (match, inside) => {
+          // 处理方括号内的内容，移除其中的<br>标签
+          return `[${inside.replace(/<br[^>]*>/g, ' ').replace(/<br\s*\/>/g, ' ').replace(/<br\s*\/\s*>/g, ' ')}]`;
+        })
+        .replace(/<[^>]*>/g, '') // 移除其他HTML标签
+        .replace(/&nbsp;/g, ' ')
+        .trim();
+      return `$$${cleanFormula}$$`;
     })
+    // 处理行内公式 \(...\)
+    .replace(/\\\((.*?)\\\)/gs, (match, formula) => {
+      // 移除公式内的HTML标签，特别是<br>标签
+      const cleanFormula = formula
+        .replace(/<br[^>]*>/g, ' ') // 移除<br>标签
+        .replace(/<br\s*\/>/g, ' ') // 处理自闭合<br/>标签
+        .replace(/<br\s*\/\s*>/g, ' ') // 处理自闭合<br />标签
+        .replace(/\[([^\]]*?)\]/g, (match, inside) => {
+          // 处理方括号内的内容，移除其中的<br>标签
+          return `[${inside.replace(/<br[^>]*>/g, ' ').replace(/<br\s*\/>/g, ' ').replace(/<br\s*\/\s*>/g, ' ')}]`;
+        })
+        .replace(/<[^>]*>/g, '') // 移除其他HTML标签
+        .replace(/&nbsp;/g, ' ')
+        .trim();
+      return `\\(${cleanFormula})\\)`;
+    })
+    // 处理块级公式 \[...\]
+    .replace(/\\\[(.*?)\\\]/gs, (match, formula) => {
+      // 移除公式内的HTML标签，特别<br>标签
+      const cleanFormula = formula
+        .replace(/<br[^>]*>/g, ' ') // 移除<br>标签
+        .replace(/<br\s*\/>/g, ' ') // 处理自闭合<br/>标签
+        .replace(/<br\s*\/\s*>/g, ' ') // 处理自闭合<br />标签
+        .replace(/\[([^\]]*?)\]/g, (match, inside) => {
+          // 处理方括号内的内容，移除其中的<br>标签
+          return `[${inside.replace(/<br[^>]*>/g, ' ').replace(/<br\s*\/>/g, ' ').replace(/<br\s*\/\s*>/g, ' ')}]`;
+        })
+        .replace(/<[^>]*>/g, '') // 移除其他HTML标签
+        .replace(/&nbsp;/g, ' ')
+        .trim();
+      return `\\[${cleanFormula}\\]`;
+    });
   
   return md.render(content)
 })

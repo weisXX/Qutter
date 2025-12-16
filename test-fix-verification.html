@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>验证修复效果</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .test-case {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .input {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 3px;
+            margin-bottom: 10px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .output {
+            background: #e8f4f8;
+            padding: 10px;
+            border-radius: 3px;
+            margin-bottom: 10px;
+        }
+        .success {
+            color: green;
+            font-weight: bold;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+        h3 {
+            margin-top: 0;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <h1>验证修复效果</h1>
+    
+    <div class="test-case">
+        <h3>测试1: \text{} 应该正常显示</h3>
+        <div class="input">
+            <strong>输入:</strong> $\text{hello world}$
+        </div>
+        <div class="output">
+            <strong>输出:</strong> <span id="output1"></span>
+        </div>
+        <div id="result1"></div>
+    </div>
+    
+    <div class="test-case">
+        <h3>测试2: 块级公式中的换行符</h3>
+        <div class="input">
+            <strong>输入:</strong> \[<br>f(x) = x^2<br>\]
+        </div>
+        <div class="output">
+            <strong>输出:</strong> <span id="output2"></span>
+        </div>
+        <div id="result2"></div>
+    </div>
+    
+    <div class="test-case">
+        <h3>测试3: 行内公式中的 \text{}</h3>
+        <div class="input">
+            <strong>输入:</strong> 这是一个 $\text{测试}$ 公式
+        </div>
+        <div class="output">
+            <strong>输出:</strong> <span id="output3"></span>
+        </div>
+        <div id="result3"></div>
+    </div>
+    
+    <div class="test-case">
+        <h3>测试4: 混合内容</h3>
+        <div class="input">
+            <strong>输入:</strong> 第一行<br>然后公式 $\text{inline}$<br>最后 \[<br>block<br>\]
+        </div>
+        <div class="output">
+            <strong>输出:</strong> <span id="output4"></span>
+        </div>
+        <div id="result4"></div>
+    </div>
+    
+    <div class="test-case">
+        <h3>测试5: 复杂的 \text{} 内容</h3>
+        <div class="input">
+            <strong>输入:</strong> $\text{hello $ world \\backslash test}$
+        </div>
+        <div class="output">
+            <strong>输出:</strong> <span id="output5"></span>
+        </div>
+        <div id="result5"></div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it@14.1.0/dist/markdown-it.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it-texmath@1.0.0/dist/markdown-it-texmath.min.js"></script>
+    
+    <script>
+        // 模拟修复后的配置
+        const md = window.markdownit({
+            html: true,
+            linkify: true,
+            typographer: true,
+            breaks: false  // 关键修复：禁用自动换行转换
+        });
+        
+        md.use(window.markdownitTexmath, {
+            engine: window.katex,
+            delimiters: ['dollars', 'brackets'],
+            katexOptions: {
+                throwOnError: false,
+                errorColor: '#cc0000',
+                strict: false
+            }
+        });
+        
+        // 模拟修复后的预处理逻辑
+        function preprocessContent(content) {
+            // 保护数学公式区域
+            const formulaRegex = /(\$\$.*?\$\$|\\\[.*?\\\]|\\\(.*?\\\)|\$.*?\$)/gs
+            const parts = []
+            let lastIndex = 0
+            let match
+            
+            while ((match = formulaRegex.exec(content)) !== null) {
+                // 添加公式前的文本
+                if (match.index > lastIndex) {
+                    const textBefore = content.slice(lastIndex, match.index)
+                    // 只对非公式区域进行HTML标签清理
+                    parts.push(textBefore
+                        .replace(/<br[^>]*>/g, '\n') // 将<br>替换为换行符
+                        .replace(/&nbsp;/g, ' ') // 替换不间断空格
+                    )
+                }
+                // 添加公式本身（不进行任何处理）
+                parts.push(match[0])
+                lastIndex = formulaRegex.lastIndex
+            }
+            
+            // 添加最后一段文本
+            if (lastIndex < content.length) {
+                const textAfter = content.slice(lastIndex)
+                parts.push(textAfter
+                    .replace(/<br[^>]*>/g, '\n') // 将<br>替换为换行符
+                    .replace(/&nbsp;/g, ' ') // 替换不间断空格
+                )
+            }
+            
+            // 如果没有匹配到公式，使用原始内容
+            if (parts.length === 0) {
+                return content
+                    .replace(/<br[^>]*>/g, '\n') // 将<br>替换为换行符
+                    .replace(/&nbsp;/g, ' ') // 替换不间断空格
+            } else {
+                return parts.join('')
+            }
+        }
+        
+        // 测试用例
+        const testCases = [
+            {
+                id: 'output1',
+                resultId: 'result1',
+                input: '$\\text{hello world}$',
+                expected: 'hello world'  // 应该显示文本，而不是点乘符号
+            },
+            {
+                id: 'output2',
+                resultId: 'result2',
+                input: '\\[<br>f(x) = x^2<br>\\]',
+                expected: 'f(x) = x^2'  // 应该正确渲染块级公式
+            },
+            {
+                id: 'output3',
+                resultId: 'result3',
+                input: '这是一个 $\\text{测试}$ 公式',
+                expected: '测试'  // 应该正确渲染行内公式中的文本
+            },
+            {
+                id: 'output4',
+                resultId: 'result4',
+                input: '第一行<br>然后公式 $\\text{inline}$<br>最后 \\[<br>block<br>\\]',
+                expected: 'inline'  // 应该正确处理混合内容
+            },
+            {
+                id: 'output5',
+                resultId: 'result5',
+                input: '$\\text{hello $ world \\\\backslash test}$',
+                expected: 'hello $ world \\ test'  // 应该正确处理特殊字符
+            }
+        ];
+        
+        // 渲染所有测试用例
+        testCases.forEach(testCase => {
+            try {
+                const processedContent = preprocessContent(testCase.input);
+                const output = md.render(processedContent);
+                document.getElementById(testCase.id).innerHTML = output;
+                
+                // 简单检查是否包含期望的内容
+                const containsExpected = output.toLowerCase().includes(testCase.expected.toLowerCase());
+                const containsCdotp = output.includes('⋅') || output.includes('\\cdotp');
+                
+                if (containsCdotp && testCase.expected !== '⋅') {
+                    document.getElementById(testCase.resultId).innerHTML = 
+                        `<span class="error">失败：输出中包含点乘符号</span>`;
+                } else if (containsExpected) {
+                    document.getElementById(testCase.resultId).innerHTML = 
+                        `<span class="success">成功：输出符合预期</span>`;
+                } else {
+                    document.getElementById(testCase.resultId).innerHTML = 
+                        `<span class="error">失败：输出不符合预期</span>`;
+                }
+                
+            } catch (error) {
+                document.getElementById(testCase.id).innerHTML = 
+                    `<span style="color: red">错误: ${error.message}</span>`;
+                document.getElementById(testCase.resultId).innerHTML = 
+                    `<span class="error">错误: ${error.message}</span>`;
+            }
+        });
+        
+        console.log('测试完成');
+    </script>
+</body>
+</html>

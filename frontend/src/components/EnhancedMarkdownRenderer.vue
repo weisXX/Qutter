@@ -60,7 +60,7 @@ const md = new MarkdownIt({
   html: true,        // 允许HTML标签
   linkify: true,     // 自动将URL转换为链接
   typographer: true, // 启用印刷美化
-  breaks: true,      // 转换换行符
+  breaks: false,     // 禁用自动转换换行符，避免干扰数学公式
   highlight: function (str: string, lang: string) {
     if (lang && hljs.getLanguage(lang)) {
       try {
@@ -104,11 +104,11 @@ md.use(markdownItTexmath, {
 })
 
 // 自定义列表项渲染规则，确保列表项内容不换行
-md.renderer.rules.list_item_open = (tokens: any, idx: number) => {
+md.renderer.rules.list_item_open = (tokens: any, idx: number): string => {
   return '<li>'
 }
 
-md.renderer.rules.list_item_close = (tokens: any, idx: number) => {
+md.renderer.rules.list_item_close = (tokens: any, idx: number): string => {
   return '</li>'
 }
 
@@ -136,7 +136,7 @@ md.renderer.rules.paragraph_close = (tokens: any, idx: number, options: any, env
 }
 
 // 自定义渲染规则，处理行内代码
-md.renderer.rules.code_inline = (tokens: any, idx: number) => {
+md.renderer.rules.code_inline = (tokens: any, idx: number): string => {
   const token = tokens[idx]
   const code = token.content
   
@@ -330,29 +330,56 @@ const processedBlocks = computed(() => {
   return blocks
 })
 
+// // 删除多余的console.log语句
+
+console.log('[[[[[[[[[[[[[[[[[[3333]]]]]]]]]]]]]]]]]]');
 // 渲染 Markdown 内容
-const renderMarkdown = (content: string) => {
-  // 预处理内容，处理HTML标签和数学公式
-  let processedContent = content
-    // 移除可能干扰数学公式的HTML标签
-    .replace(/<br[^>]*>/g, ' ') // 将<br>替换为空格
-    .replace(/<br\s*\/>/g, ' ') // 处理自闭合<br/>
-    .replace(/&nbsp;/g, ' ') // 替换不间断空格
-    // 处理数学公式中的特殊字符
-    .replace(/\\cdotp/g, '/')
-    // 临时保护数学公式中的特殊符号
-    .replace(/\$(.*?)\$/g, (match, formula) => {
-      // 移除公式内的HTML标签
-      const cleanFormula = formula.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ')
-      return `$${cleanFormula}$`
-    })
-    .replace(/\$\$(.*?)\$\$/g, (match, formula) => {
-      // 移除公式内的HTML标签
-      const cleanFormula = formula.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ')
-      return `$$${cleanFormula}$$`
-    })
+const renderMarkdown = (content: string): string => {
+  console.log(content)
   
-  return md.render(processedContent)
+  // 更智能的预处理：只处理数学公式外的HTML标签
+  let processedContent = content
+  
+  // 首先，保护数学公式区域
+  const formulaRegex = /(\$\$.*?\$\$|\\\[.*?\\\]|\\\(.*?\\\)|\$.*?\$)/gs
+  const parts: string[] = []
+  let lastIndex = 0
+  let match
+  
+  while ((match = formulaRegex.exec(content)) !== null) {
+    // 添加公式前的文本
+    if (match.index > lastIndex) {
+      const textBefore = content.slice(lastIndex, match.index)
+      // 只对非公式区域进行HTML标签清理
+      parts.push(textBefore
+        .replace(/<br[^>]*>/g, '\n') // 将<br>替换为换行符
+        .replace(/&nbsp;/g, ' ') // 替换不间断空格
+      )
+    }
+    // 添加公式本身（不进行任何处理）
+    parts.push(match[0])
+    lastIndex = formulaRegex.lastIndex
+  }
+  
+  // 添加最后一段文本
+  if (lastIndex < content.length) {
+    const textAfter = content.slice(lastIndex)
+    parts.push(textAfter
+      .replace(/<br[^>]*>/g, '\n') // 将<br>替换为换行符
+      .replace(/&nbsp;/g, ' ') // 替换不间断空格
+    )
+  }
+  
+  // 如果没有匹配到公式，使用原始内容
+  if (parts.length === 0) {
+    processedContent = content
+      .replace(/<br[^>]*>/g, '\n') // 将<br>替换为换行符
+      .replace(/&nbsp;/g, ' ') // 替换不间断空格
+  } else {
+    processedContent = parts.join('')
+  }
+  
+  return md.render(processedContent).replace(/\\cdotp/g, '.')
 }
 
 // 解析图表配置
@@ -638,7 +665,6 @@ const parseChartConfig = (configText: string) => {
   background: #f6f8fa !important;
   color: #1f2937 !important;
 }
-
 /* 数学公式样式 */
 .markdown-block :deep(.katex) {
   font-size: 1.1em;

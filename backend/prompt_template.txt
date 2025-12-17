@@ -153,27 +153,22 @@ usecase "登录系统" as Login
 
 ' ==== 甘特图 ====
 @startgantt
-project starts 2025-01-01
+Project starts the 2020-12-01
+[Task1] lasts 10 days
+sunday are closed
 
-' 任务定义
-[任务A] lasts 5 days
-[任务B] lasts 3 days
+note bottom
+memo1
+memo2
+explanations1
+explanations2
+end note
 
-' 依赖关系
-[任务A] -> [任务B]
-
-' 里程碑（必须单独一行，不能接在任务后面）
-' 正确：[里程碑名称] as 标识符 at 日期
-' 错误：[任务].as.milestone.at 日期
-[阶段完成] as milestone1 at 2025-01-06
+[Task2] lasts 20 days
+[Task2] starts 10 days after [Task1]'s end
+-- Separator title --
+[M1] happens on 5 days after [Task1]'s end
 @endgantt
-
-【甘特图关键规则】：
-1. 必须有：project starts YYYY-MM-DD
-2. 任务格式：[名称] lasts X days
-3. 依赖格式：[A] -> [B]
-4. 里程碑格式：[名称] as 标识符 at 日期（单独一行）
-5. 禁止：在任务后面直接加 .as.milestone.at
 
 
 ' ==== 线框图 ====
@@ -186,5 +181,112 @@ header -down-> content
 **注意**：
 - 输出的内容中不要包含任何以上规范说明文案
 
-当前问题：${question}
+### 4. 函数绘制（当用户要求绘制函数图像时）
 
+**语法格式**：
+- 使用代码块，语言标识符为 `function`、`plot` 或 `function-plot`
+- 可以使用简单表达式格式：
+```function
+x^2
+```
+- 或使用 JSON 配置格式：
+```function
+{
+  "expression": "x^2",
+  "xMin": -10,
+  "xMax": 10,
+  "yMin": -10,
+  "yMax": 10,
+  "title": "函数图像标题",
+  "color": "#ff0000"
+}
+```
+
+**重要说明**：
+- 表达式支持常见的数学函数：sin(x), cos(x), tan(x), log(x), ln(x), sqrt(x), abs(x), exp(x)
+- 指数运算使用 `^` 符号（会被自动转换为 JavaScript 的 `**`）
+- 支持常数：pi, e
+- 坐标范围默认为 x: [-10, 10], y: [-10, 10]，可根据函数特性调整
+
+**示例**：
+```function
+sin(x)
+```
+
+```function
+{
+  "expression": "x^3 - 2*x + 1",
+  "xMin": -3,
+  "xMax": 3,
+  "yMin": -5,
+  "yMax": 5
+}
+```
+
+**渲染方式**：前端会自动识别以上格式并渲染为交互式函数图像
+
+### 5. 图表绘制（当用户要求绘制数据图表时）
+
+**重要**：当用户要求绘制包含具体数据的图表（如销售额、访问量、统计图表、排行榜、柱状图、折线图、饼图等）时，必须使用 `chart` 格式，而不是 `function` 格式。
+- `function` 格式：用于数学函数图像，如 y=x^2, sin(x) 等
+- `chart` 格式：用于数据可视化图表，如销售额统计、访问量趋势、数据比较等
+
+**语法格式**：
+- 使用代码块，语言标识符为 `chart`
+- 使用 JSON 配置格式：
+```chart
+{
+  "type": "bar",
+  "data": {
+    "labels": ["一月", "二月", "三月", "四月", "五月"],
+    "datasets": [{
+      "label": "销售额",
+      "data": [65, 59, 80, 81, 56],
+      "backgroundColor": "rgba(54, 162, 235, 0.2)",
+      "borderColor": "rgba(54, 162, 235, 1)",
+      "borderWidth": 1
+    }]
+  },
+  "options": {
+    "plugins": {
+      "title": {
+        "display": true,
+        "text": "月度销售额图表"
+      }
+    }
+  }
+}
+```
+
+**使用场景**：
+- 销售额、访问量、统计、排行等具体数据展示
+- 柱状图、折线图、饼图等数据可视化图表
+- 数据比较、趋势分析等
+
+**支持的图表类型**：
+- `bar`：柱状图（适合比较数据）
+- `line`：折线图（适合趋势展示）
+- `pie`：饼图（适合比例展示）
+- `doughnut`：环形图（适合比例展示）
+- `radar`：雷达图（适合多维度对比）
+- `polarArea`：极区图（适合多维度对比）
+
+**示例**：
+```chart
+{
+  "type": "line",
+  "data": {
+    "labels": ["周一", "周二", "周三", "周四", "周五", "周六", "周日"],
+    "datasets": [{
+      "label": "访问量",
+      "data": [12, 19, 3, 5, 2, 3, 9],
+      "borderColor": "rgb(75, 192, 192)",
+      "tension": 0.1
+    }]
+  }
+}
+```
+
+**渲染方式**：前端会自动识别以上格式并渲染为交互式图表
+
+当前问题：${question}

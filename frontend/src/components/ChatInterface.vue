@@ -211,7 +211,7 @@
           </div>
           <div class="message-content">
             <div class="message-text" v-if="message.type === 'user'">
-              <div class="user-message-bubble">{{ message.text }}</div>
+              <div class="user-message-bubble" @click="fillMessageInput(message.text)">{{ message.text }}</div>
             </div>
             <div class="message-text" v-else>
               <MarkedRenderer v-if="rendererType === 'marked'" :content="message.text" />
@@ -820,6 +820,16 @@ const copyMessage = async (text: string) => {
       console.error('复制失败:', fallbackErr)
     }
     document.body.removeChild(textArea)
+  }
+}
+
+// 填充消息输入框
+const fillMessageInput = (text: string) => {
+  currentMessage.value = text;
+  if (messageInput.value) {
+    messageInput.value.focus();
+    // 将光标移动到文本末尾
+    messageInput.value.selectionStart = messageInput.value.selectionEnd = text.length;
   }
 }
 

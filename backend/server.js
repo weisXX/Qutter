@@ -30,6 +30,7 @@ async function initializeApp() {
 
 // Ollama API配置
 const OLLAMA_API_URL = process.env.OLLAMA_API_URL || 'http://localhost:11434';
+const DEFAULT_MODEL = process.env.DEFAULT_MODEL;
 
 // 健康检查端点
 app.get('/api/health', (req, res) => {
@@ -126,7 +127,7 @@ app.get('/api/models', async (req, res) => {
 // 技术问答接口
 app.post('/api/ask', async (req, res) => {
   try {
-    const { question, model = 'gpt-oss:120b-cloud', sessionId } = req.body;
+    const { question, model = DEFAULT_MODEL, sessionId } = req.body;
     
     if (!question) {
       return res.status(400).json({ error: '请提供问题' });
@@ -196,7 +197,7 @@ app.post('/api/ask', async (req, res) => {
 // 流式技术问答接口
 app.post('/api/ask-stream', async (req, res) => {
   try {
-    const { question, model = 'gpt-oss:120b-cloud', sessionId } = req.body;
+    const { question, model = DEFAULT_MODEL, sessionId } = req.body;
     
     if (!question) {
       return res.status(400).json({ error: '请提供问题' });
@@ -390,7 +391,7 @@ app.post('/api/upload', upload.array('files'), async (req, res) => {
 
 // 带文件的流式问答API
 app.post('/api/ask-stream-with-files', upload.array('files'), async (req, res) => {
-  const { question, model = 'gpt-oss:120b-cloud', sessionId } = req.body;
+  const { question, model = DEFAULT_MODEL, sessionId } = req.body;
   
   if (!question) {
     return res.status(400).json({ error: '请提供问题' });

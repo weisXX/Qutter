@@ -1,6 +1,7 @@
 import axios from 'axios'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'
+const DEFAULT_MODEL = import.meta.env.VITE_DEFAULT_MODEL || ''
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -78,7 +79,7 @@ export const askQuestionStream = async (
       },
       body: JSON.stringify({
         question,
-        model: model || 'gpt-oss:120b-cloud',
+        model: model || DEFAULT_MODEL,
         sessionId
       })
     })
@@ -137,7 +138,7 @@ export const askQuestionStreamWithFiles = async (
   try {
     const formData = new FormData()
     formData.append('question', question)
-    formData.append('model', model || 'gpt-oss:120b-cloud')
+    formData.append('model', model || DEFAULT_MODEL)
     if (sessionId) {
       formData.append('sessionId', sessionId)
     }
@@ -221,7 +222,7 @@ export const askQuestion = async (question: string, model?: string, sessionId?: 
   try {
     const response = await api.post('/ask', {
       question,
-      model: model || 'gpt-oss:120b-cloud',
+      model: model || DEFAULT_MODEL,
       sessionId
     })
     return response.data

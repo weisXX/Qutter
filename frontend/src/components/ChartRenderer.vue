@@ -17,7 +17,13 @@ import {
   Tooltip,
   Legend,
   ArcElement,
-  RadialLinearScale
+  RadialLinearScale,
+  LineController,
+  BarController,
+  PieController,
+  DoughnutController,
+  RadarController,
+  PolarAreaController
 } from 'chart.js'
 
 // 注册 Chart.js 组件
@@ -31,7 +37,13 @@ Chart.register(
   Tooltip,
   Legend,
   ArcElement,
-  RadialLinearScale
+  RadialLinearScale,
+  LineController,
+  BarController,
+  PieController,
+  DoughnutController,
+  RadarController,
+  PolarAreaController
 )
 
 interface Props {

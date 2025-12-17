@@ -22,6 +22,13 @@
         :options="block.options"
       />
       
+      <!-- 函数绘制 -->
+      <FunctionPlotRenderer
+        v-else-if="block.type === 'function'"
+        :expression="block.expression"
+        :options="block.options"
+      />
+      
       <!-- 普通 Markdown 内容 -->
       <div 
         v-else-if="block.type === 'markdown'"
@@ -45,6 +52,7 @@ import 'katex/dist/katex.min.css'
 import MermaidRenderer from './MermaidRenderer.vue'
 import ChartRenderer from './ChartRenderer.vue'
 import PlantUMLRenderer from './PlantUMLRenderer.vue'
+import FunctionPlotRenderer from './FunctionPlotRenderer.vue'
 
 interface Props {
   content: string
@@ -166,12 +174,21 @@ md.renderer.rules.fence = (tokens: any, idx: number, options: any, env: any, ren
   return `<div class="code-block-container">
     <div class="code-toolbar">
       <span class="code-language">${langName || 'text'}</span>
-      <button class="copy-button" onclick="copyCode('${codeId}')" title="复制代码">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-        </svg>
-      </button>
+      <div class="toolbar-buttons">
+        <button class="download-button" onclick="downloadCode('${codeId}', '${langName || 'code'}')" title="下载代码">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7,10 12,15 17,10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+        </button>
+        <button class="copy-button" onclick="copyCode('${codeId}')" title="复制代码">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+        </button>
+      </div>
     </div>
     <pre class="hljs"><code id="${codeId}"${langClass}>${highlighted}</code></pre>
   </div>`
@@ -245,7 +262,7 @@ function detectLanguage(code: string): string | null {
 }
 
 
-// 添加全局复制函数
+// 添加全局复制和下载函数
 if (typeof window !== 'undefined') {
   (window as any).copyCode = async (codeId: string) => {
     try {
@@ -268,6 +285,75 @@ if (typeof window !== 'undefined') {
       console.error('复制失败:', err)
     }
   }
+
+  (window as any).downloadCode = (codeId: string, langName: string) => {
+    try {
+      const codeElement = document.getElementById(codeId)
+      if (codeElement) {
+        const codeText = codeElement.textContent || ''
+        const blob = new Blob([codeText], { type: 'text/plain;charset=utf-8' })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        // 根据语言确定文件扩展名
+        const extension = getLanguageExtension(langName) || 'txt'
+        link.download = `code_${Date.now()}.${extension}`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(url)
+
+        // 下载成功提示
+        const button = codeElement.closest('.code-block-container')?.querySelector('.download-button')
+        if (button) {
+          const originalHTML = button.innerHTML
+          button.innerHTML = '✓'
+          button.style.color = '#10b981'
+          setTimeout(() => {
+            button.innerHTML = originalHTML
+            button.style.color = ''
+          }, 2000)
+        }
+      }
+    } catch (err) {
+      console.error('下载失败:', err)
+    }
+  }
+
+  // 根据语言名称获取文件扩展名
+  const getLanguageExtension = (langName: string): string => {
+    const langMap: { [key: string]: string } = {
+      'javascript': 'js',
+      'typescript': 'ts',
+      'java': 'java',
+      'python': 'py',
+      'c': 'c',
+      'cpp': 'cpp',
+      'c++': 'cpp',
+      'php': 'php',
+      'html': 'html',
+      'css': 'css',
+      'sql': 'sql',
+      'json': 'json',
+      'xml': 'xml',
+      'yaml': 'yaml',
+      'markdown': 'md',
+      'go': 'go',
+      'rust': 'rs',
+      'swift': 'swift',
+      'kotlin': 'kt',
+      'scala': 'scala',
+      'ruby': 'rb',
+      'perl': 'pl',
+      'r': 'r',
+      'matlab': 'm',
+      'shell': 'sh',
+      'bash': 'sh',
+      'dockerfile': 'Dockerfile',
+      'makefile': 'Makefile'
+    }
+    return langMap[langName.toLowerCase()] || 'txt'
+  }
 }
 
 // 处理内容，分离图表和普通 Markdown
@@ -275,10 +361,11 @@ const processedBlocks = computed(() => {
   if (!props.content) return []
   
   const blocks: Array<{
-    type: 'mermaid' | 'plantuml' | 'chart' | 'markdown'
+    type: 'mermaid' | 'plantuml' | 'chart' | 'function' | 'markdown'
     content?: string
     data?: any
     chartType?: string
+    expression?: string
     options?: any
   }> = []
   
@@ -288,6 +375,7 @@ const processedBlocks = computed(() => {
   let inMermaidBlock = false
   let inPlantUMLBlock = false
   let inChartBlock = false
+  let inFunctionPlotBlock = false
   let chartContent = ''
   
   for (let i = 0; i < lines.length; i++) {
@@ -378,8 +466,43 @@ const processedBlocks = computed(() => {
       continue
     }
     
+    // 检测函数绘制代码块
+    if (line === '```function' || line === '```plot' || line === '```function-plot') {
+      // 保存之前的 Markdown 内容
+      if (currentMarkdownLines.length > 0) {
+        const markdownContent = currentMarkdownLines.join('\n')
+        blocks.push({
+          type: 'markdown',
+          content: renderMarkdown(markdownContent)
+        })
+        currentMarkdownLines = []
+      }
+      inFunctionPlotBlock = true
+      chartContent = ''
+      continue
+    }
+    
+    if (line === '```' && inFunctionPlotBlock) {
+      inFunctionPlotBlock = false
+      try {
+        const plotConfig = parseFunctionPlotConfig(chartContent.trim())
+        blocks.push({
+          type: 'function',
+          ...plotConfig
+        })
+      } catch (error) {
+        console.error('函数绘制配置解析错误:', error)
+        // 将错误信息作为 Markdown 显示
+        blocks.push({
+          type: 'markdown',
+          content: `<div class="error">函数绘制配置错误: ${error}</div>`
+        })
+      }
+      continue
+    }
+    
     // 收集内容
-    if (inMermaidBlock || inPlantUMLBlock || inChartBlock) {
+    if (inMermaidBlock || inPlantUMLBlock || inChartBlock || inFunctionPlotBlock) {
       chartContent += lines[i] + '\n'
     } else {
       currentMarkdownLines.push(lines[i])
@@ -507,6 +630,75 @@ const parseChartConfig = (configText: string) => {
       data: config.data,
       chartType: config.type,
       options: config.options
+    }
+  }
+}
+
+// 解析函数绘制配置
+const parseFunctionPlotConfig = (configText: string) => {
+  try {
+    // 尝试解析 JSON 配置
+    const config = JSON.parse(configText)
+    
+    return {
+      expression: config.expression || config.function || '',
+      options: {
+        xMin: config.xMin || -10,
+        xMax: config.xMax || 10,
+        yMin: config.yMin || -10,
+        yMax: config.yMax || 10,
+        width: config.width || 600,
+        height: config.height || 400,
+        title: config.title || '函数图像',
+        color: config.color || '#1f77b4'
+      }
+    }
+  } catch (error) {
+    // 如果不是 JSON，尝试解析简单的文本格式
+    const lines = configText.split('\n')
+    let expression = ''
+    const options: any = {
+      xMin: -10,
+      xMax: 10,
+      yMin: -10,
+      yMax: 10,
+      width: 600,
+      height: 400,
+      title: '函数图像',
+      color: '#1f77b4'
+    }
+    
+    for (const line of lines) {
+      const trimmedLine = line.trim()
+      if (!trimmedLine || trimmedLine.startsWith('#')) continue
+      
+      if (trimmedLine.toLowerCase().startsWith('expression:') || trimmedLine.toLowerCase().startsWith('function:')) {
+        expression = trimmedLine.substring(trimmedLine.indexOf(':') + 1).trim()
+      } else if (trimmedLine.toLowerCase().startsWith('x-min:')) {
+        options.xMin = parseFloat(trimmedLine.substring(6).trim())
+      } else if (trimmedLine.toLowerCase().startsWith('x-max:')) {
+        options.xMax = parseFloat(trimmedLine.substring(6).trim())
+      } else if (trimmedLine.toLowerCase().startsWith('y-min:')) {
+        options.yMin = parseFloat(trimmedLine.substring(6).trim())
+      } else if (trimmedLine.toLowerCase().startsWith('y-max:')) {
+        options.yMax = parseFloat(trimmedLine.substring(6).trim())
+      } else if (trimmedLine.toLowerCase().startsWith('title:')) {
+        options.title = trimmedLine.substring(6).trim()
+      } else if (trimmedLine.toLowerCase().startsWith('color:')) {
+        options.color = trimmedLine.substring(6).trim()
+      } else if (trimmedLine.toLowerCase().startsWith('width:')) {
+        options.width = parseInt(trimmedLine.substring(6).trim(), 10)
+      } else if (trimmedLine.toLowerCase().startsWith('height:')) {
+        options.height = parseInt(trimmedLine.substring(8).trim(), 10)
+      } else if (!expression && !trimmedLine.startsWith('x-') && !trimmedLine.startsWith('y-') && !trimmedLine.startsWith('title:') && !trimmedLine.startsWith('color:') && !trimmedLine.startsWith('width:') && !trimmedLine.startsWith('height:')) {
+        // 如果没有明确指定表达式，且当前行不是选项，则认为是表达式
+        expression = trimmedLine
+      }
+    }
+    
+    return {
+      expression: expression || configText.trim(),
+      options: options
     }
   }
 }
@@ -725,10 +917,69 @@ const parseChartConfig = (configText: string) => {
   margin: 0.2em 0;
 }
 
-/* 代码块深色主题覆盖 */
+/* 代码块工具栏样式 */
+.markdown-block :deep(.code-block-container) {
+  position: relative;
+  margin: 1em 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #d0d7de;
+  white-space: normal;
+}
+
+.markdown-block :deep(.code-toolbar) {
+  background-color: #f6f8fa;
+  padding: 6px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #d0d7de;
+  font-size: 0.8em;
+  color: #57606a;
+}
+
+.markdown-block :deep(.code-language) {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-weight: 600;
+}
+
+.markdown-block :deep(.toolbar-buttons) {
+  display: flex;
+  gap: 8px;
+}
+
+.markdown-block :deep(.copy-button), .markdown-block :deep(.download-button) {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  color: #57606a;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+}
+
+.markdown-block :deep(.copy-button):hover, .markdown-block :deep(.download-button):hover {
+  background-color: #e6e9eb;
+  color: #1f2937;
+}
+
+.markdown-block :deep(.copy-button):active, .markdown-block :deep(.download-button):active {
+  transform: scale(0.95);
+}
+
+.markdown-block :deep(pre) {
+  margin: 0;
+  border-radius: 0;
+}
+
 .markdown-block :deep(.hljs) {
   background: #f6f8fa !important;
   color: #1f2937 !important;
+  border-radius: 0;
+  margin: 0;
+  padding: 16px;
 }
 /* 数学公式样式 */
 .markdown-block :deep(.katex) {

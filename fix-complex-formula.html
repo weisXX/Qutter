@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>修复复杂数学公式</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .section {
+            margin: 30px 0;
+            padding: 20px;
+            border-left: 4px solid #4CAF50;
+            background: #f9f9f9;
+            border-radius: 0 5px 5px 0;
+        }
+        .problem {
+            border-left-color: #f44336;
+        }
+        .solution {
+            border-left-color: #2196F3;
+        }
+        .example {
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            margin: 15px 0;
+        }
+        code {
+            background: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', monospace;
+            color: #d32f2f;
+        }
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-family: 'Consolas', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .formula-display {
+            background: #e8f4f8;
+            padding: 20px;
+            border-radius: 5px;
+            text-align: center;
+            margin: 15px 0;
+            font-size: 1.2em;
+        }
+        .error {
+            color: #d32f2f;
+            background: #ffebee;
+            padding: 10px;
+            border-radius: 3px;
+            margin: 10px 0;
+        }
+        .success {
+            color: #388e3c;
+            background: #e8f5e8;
+            padding: 10px;
+            border-radius: 3px;
+            margin: 10px 0;
+        }
+        h2 {
+            color: #333;
+            margin-top: 0;
+        }
+        h3 {
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <h1>复杂数学公式解析问题与修复</h1>
+    
+    <div class="section problem">
+        <h2>❌ 原始问题</h2>
+        <div class="example">
+            <h3>你的公式：</h3>
+            <pre>[\boxed{\mathbf{F}_{12}= -,G,\frac{m_{1}m_{2}}{r^{3}};\mathbf{r}}
+\qquad\text{或}\qquad
+|\mathbf{F}_{12}|=G\frac{m_{1}m_{2}}{r^{2}}]</pre>
+            
+            <div class="error">
+                <strong>无法解析的原因：</strong>
+                <ol>
+                    <li><code>-,G,</code> - 逗号和空格导致语法错误</li>
+                    <li><code>\boxed{}</code> - 需要特殊宏定义</li>
+                    <li>分号 <code>;</code> 在公式中可能被误解</li>
+                    <li>公式结构不清晰</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+    
+    <div class="section solution">
+        <h2>✅ 修复方案</h2>
+        
+        <div class="example">
+            <h3>方案1：修正公式语法（推荐）</h3>
+            <pre>\[
+\boxed{\mathbf{F}_{12} = -G\frac{m_{1}m_{2}}{r^{3}}\mathbf{r}}
+\qquad\text{或}\qquad
+|\mathbf{F}_{12}| = G\frac{m_{1}m_{2}}{r^{2}}
+\]</pre>
+            
+            <div class="formula-display" id="formula1"></div>
+            
+            <div class="success">
+                <strong>修改说明：</strong>
+                <ul>
+                    <li>将 <code>-,G,</code> 改为 <code>-G</code>（万有引力常数）</li>
+                    <li>移除多余的分号 <code>;</code></li>
+                    <li>使用 <code>\[</code> 和 <code>\]</code> 包裹块级公式</li>
+                    <li>添加了 <code>\boxed</code> 宏定义支持</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="example">
+            <h3>方案2：分开两个独立的公式</h3>
+            <pre>向量形式：
+\[
+\boxed{\mathbf{F}_{12} = -G\frac{m_{1}m_{2}}{r^{3}}\mathbf{r}}
+\]
+
+标量形式：
+\[
+|\mathbf{F}_{12}| = G\frac{m_{1}m_{2}}{r^{2}}
+\]</pre>
+            
+            <div class="formula-display" id="formula2"></div>
+        </div>
+        
+        <div class="example">
+            <h3>方案3：使用行内公式</h3>
+            <pre>万有引力定律的向量形式为 $\boxed{\mathbf{F}_{12} = -G\frac{m_{1}m_{2}}{r^{3}}\mathbf{r}}$，
+标量形式为 $|\mathbf{F}_{12}| = G\frac{m_{1}m_{2}}{r^{2}}$。</pre>
+            
+            <div class="formula-display" id="formula3"></div>
+        </div>
+    </div>
+    
+    <div class="section">
+        <h2>🔧 技术修复</h2>
+        
+        <div class="example">
+            <h3>在 EnhancedMarkdownRenderer.vue 中添加的配置：</h3>
+            <pre>md.use(markdownItTexmath, {
+  engine: katex,
+  delimiters: ['dollars', 'brackets'],
+  katexOptions: {
+    throwOnError: false,
+    errorColor: '#cc0000',
+    strict: false,
+    // 添加宏定义以支持更多 LaTeX 命令
+    macros: {
+      '\\boxed': '\\fbox{${#1}}',  // 支持 \\boxed 命令
+      '\\RR': '\\mathbb{R}',       // 常用宏
+      '\\CC': '\\mathbb{C}',
+      '\\NN': '\\mathbb{N}',
+      '\\ZZ': '\\mathbb{Z}',
+      '\\QQ': '\\mathbb{Q}'
+    }
+  }
+})</pre>
+        </div>
+        
+        <div class="example">
+            <h3>使用建议：</h3>
+            <ol>
+                <li>使用 <code>\[</code> 和 <code>\]</code> 包裹块级公式</li>
+                <li>使用 <code>$</code> 包裹行内公式</li>
+                <li>避免在公式中使用普通文本的逗号、分号</li>
+                <li>复杂的公式可以拆分成多个简单公式</li>
+                <li>使用 <code>\qquad</code> 或 <code>\quad</code> 添加间距</li>
+            </ol>
+        </div>
+    </div>
+    
+    <div class="section">
+        <h2>📝 最终可用的 Markdown 代码</h2>
+        
+        <div class="example">
+            <h3>复制以下代码到你的 Markdown 中：</h3>
+            <pre>万有引力定律：
+
+\[
+\boxed{\mathbf{F}_{12} = -G\frac{m_{1}m_{2}}{r^{3}}\mathbf{r}}
+\qquad\text{或}\qquad
+|\mathbf{F}_{12}| = G\frac{m_{1}m_{2}}{r^{2}}
+\]
+
+其中：
+- \(\mathbf{F}_{12}\)：质点1对质点2的引力向量
+- \(G\)：万有引力常数
+- \(m_{1}, m_{2}\)：两个质点的质量
+- \(r\)：两质点间的距离
+- \(\mathbf{r}\)：从质点1指向质点2的单位向量</pre>
+            
+            <div class="formula-display" id="final-formula"></div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script>
+        // 配置 KaTeX
+        const katexOptions = {
+            displayMode: true,
+            throwOnError: false,
+            errorColor: '#cc0000',
+            strict: false,
+            macros: {
+                '\\boxed': '\\fbox{${#1}}',
+                '\\RR': '\\mathbb{R}',
+                '\\CC': '\\mathbb{C}',
+                '\\NN': '\\mathbb{N}',
+                '\\ZZ': '\\mathbb{Z}',
+                '\\QQ': '\\mathbb{Q}'
+            }
+        };
+        
+        // 渲染公式
+        const formulas = [
+            {
+                id: 'formula1',
+                tex: '\\boxed{\\mathbf{F}_{12} = -G\\frac{m_{1}m_{2}}{r^{3}}\\mathbf{r}}\\qquad\\text{或}\\qquad|\\mathbf{F}_{12}| = G\\frac{m_{1}m_{2}}{r^{2}}',
+                displayMode: true
+            },
+            {
+                id: 'formula2',
+                tex: '\\boxed{\\mathbf{F}_{12} = -G\\frac{m_{1}m_{2}}{r^{3}}\\mathbf{r}}',
+                displayMode: true
+            },
+            {
+                id: 'formula2b',
+                container: 'formula2',
+                tex: '|\\mathbf{F}_{12}| = G\\frac{m_{1}m_{2}}{r^{2}}',
+                displayMode: true,
+                append: true
+            },
+            {
+                id: 'formula3',
+                tex: '\\boxed{\\mathbf{F}_{12} = -G\\frac{m_{1}m_{2}}{r^{3}}\\mathbf{r}}',
+                displayMode: false
+            },
+            {
+                id: 'final-formula',
+                tex: '\\boxed{\\mathbf{F}_{12} = -G\\frac{m_{1}m_{2}}{r^{3}}\\mathbf{r}}\\qquad\\text{或}\\qquad|\\mathbf{F}_{12}| = G\\frac{m_{1}m_{2}}{r^{2}}',
+                displayMode: true
+            }
+        ];
+        
+        // 渲染所有公式
+        formulas.forEach(formula => {
+            try {
+                const options = { ...katexOptions, displayMode: formula.displayMode };
+                const html = katex.renderToString(formula.tex, options);
+                
+                if (formula.append && formula.container) {
+                    const container = document.getElementById(formula.container);
+                    if (container) {
+                        container.innerHTML += '<div style="margin-top: 20px;">' + html + '</div>';
+                    }
+                } else {
+                    const element = document.getElementById(formula.id);
+                    if (element) {
+                        element.innerHTML = html;
+                    }
+                }
+            } catch (error) {
+                console.error(`渲染公式 ${formula.id} 失败:`, error);
+                const element = document.getElementById(formula.id);
+                if (element) {
+                    element.innerHTML = `<div class="error">渲染错误: ${error.message}</div>`;
+                }
+            }
+        });
+        
+        // 添加行内公式示例
+        const inlineFormula = '\\boxed{\\mathbf{F}_{12} = -G\\frac{m_{1}m_{2}}{r^{3}}\\mathbf{r}}';
+        const inlineHtml = katex.renderToString(inlineFormula, { ...katexOptions, displayMode: false });
+        document.getElementById('formula3').innerHTML = 
+            `万有引力定律的向量形式为 ${inlineHtml}，标量形式为 \(|\\mathbf{F}_{12}| = G\\frac{m_{1}m_{2}}{r^{2}}\)。`;
+    </script>
+</body>
+</html>

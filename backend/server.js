@@ -6,6 +6,12 @@ require('dotenv').config();
 const { testConnection, initDatabase } = require('./config/database');
 const sessionService = require('./services/sessionService');
 const { upload, FileProcessor } = require('./services/fileProcessor');
+const { PromptManager } = require('./promptManager');
+// 初始化提示词管理器
+const promptManager = new PromptManager();
+promptManager.loadTemplate();
+
+
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -145,10 +151,18 @@ app.post('/api/ask', async (req, res) => {
       }
     }
 
-    const prompt = `你是一位资深的技术专家，请详细、准确地回答以下技术问题。回答要专业、实用，并包含相关的代码示例或最佳实践建议。${contextPrompt}
-当前问题：${question}
+//     const prompt = `你是一位资深的技术专家，请详细、准确地回答提问到的技术问题。回答要专业、实用，并包含相关的代码示例或最佳实践建议。${contextPrompt}
+// 当前问题：${question}
 
-请用中文回答。`;
+// 请用中文回答。`;
+
+    const prompt = `你是一位资深的技术专家，请详细、准确地回答提问到的技术问题，回答要专业、实用，
+                  如果回答内容涉及化学方程式、数学公式、物理公式等，请用标准的 LaTeX 数学公式格式输出，使用 $...$ 或 $$...$$ 包裹，
+                  如果问题要求绘制图表或图像，请用标准的plantUML语法。${contextPrompt}
+                  当前问题：${question}
+                  请用中文回答。`;
+
+// “请用标准的 LaTeX 数学公式格式输出化学方程式，使用 $...$ 或 $$...$$ 包裹。
 
     const response = await axios.post(`${OLLAMA_API_URL}/api/generate`, {
       model: model,
@@ -207,11 +221,63 @@ app.post('/api/ask-stream', async (req, res) => {
         console.error('获取会话上下文失败:', error);
       }
     }
+    const prompt = promptManager.generatePrompt(question);
+//     const prompt = `你是一位资深的技术专家，请详细、准确地回答以下技术问题。回答要专业、实用，并包含相关的代码示例或最佳实践建议。${contextPrompt}
+// 当前问题：${question}
 
-    const prompt = `你是一位资深的技术专家，请详细、准确地回答以下技术问题。回答要专业、实用，并包含相关的代码示例或最佳实践建议。${contextPrompt}
-当前问题：${question}
+// 同时，你是PlantUML专家，如果我要求你根据我的需求生成 PlantUML 代码，请根据我的需求生成正确的 PlantUML 代码。
+//                 简单三步生成规则：
 
-请用中文回答。`;
+//                 1. 先判断图表类型
+//                 - 画类、接口、继承 → 用类图
+//                 - 画流程、步骤、判断 → 用活动图
+//                 - 画消息、调用顺序 → 用时序图
+//                 - 画组件、服务、模块 → 用组件图
+//                 - 画思维、脑图、分类 → 用思维导图
+//                 - 画任务、时间、进度 → 用甘特图
+//                 - 画界面、UI、布局 → 用线框图
+
+//                 2. 用正确的语法开头
+//                 - 类图：@startuml
+//                 - 时序图：@startuml sequence
+//                 - 活动图：@startuml activity
+//                 - 思维导图：@startmindmap
+//                 - 甘特图：@startgantt
+//                 - 线框图：@startwireframe
+
+//                 ### 3. 避免常见错误
+//                 - ❌ 不要混用箭头：类图用 -->，时序图用 ->
+//                 - ❌ 不要忘记结束标记：@enduml 或 @end...
+//                 - ❌ 不要缺少大括号：class Name { 内容 }
+//                 - ✅ 注释用单引号：'这是注释'
+//                 - ✅ 字符串用双引号："标签内容"
+
+//                 输出格式
+//                 只输出完整的 PlantUML 代码块，例如：
+
+//                 \`\`\`plantuml
+//                 @startuml
+//                 title 示例
+//                 class User {
+//                     -name: String
+//                 }
+//                 @enduml
+
+// // 请用中文回答。`;
+// const prompt = `你是一位资深的技术专家，请详细、准确地回答提问到的技术问题，回答要专业、实用，
+//                 重要格式规定：
+//                 1.  所有数学公式、化学方程式、物理公式，**必须且只能**使用标准的 LaTeX 表达式。
+//                 2.  绝对禁止使用 \[ ... \] 或 \begin{equation}...\end{equation} 等环境。
+//                 3.  唯一允许的格式是：行内公式用单个美元符号 $...$ 包裹，独立公式用双美元符号 $$...$$ 包裹。
+//                 4.  请在生成最终答案后，自行检查一遍，确保没有出现任何违反此规定的格式。
+//                 如果问题要求输出化学方程式，请用 mhchem 格式输出。
+//                 如果问题要求绘制图表或图像，请用标准的plantUML语法，例如：@startuml ... @enduml，要保证没有语法错误。
+//                 当前问题：${question}
+//                 请严格遵守以上格式规定。`
+//                   // 如果问题涉及化学方程式、数学公式、物理公式等，请用标准的 LaTeX 数学公式格式输出，使用 $...$ 或 $$...$$ 包裹，如果输出有 \[ ... \] 或 \[ ... \] 包裹，也需要用 $...$ 或 $$...$$ 替换掉。
+//                   // 如果问题要求绘制图表或图像，请用标准的plantUML语法，例如：@startuml ... @enduml，要保证没有语法错误。${contextPrompt}
+//                   // 当前问题：${question}
+//                   // 请用中文回答。`;
 
     // 设置SSE响应头
     res.writeHead(200, {

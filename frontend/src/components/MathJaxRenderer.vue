@@ -1,5 +1,5 @@
 <template>
-  <div class="enhanced-markdown-content">
+  <div class="mathjax-content">
     <template v-for="(block, index) in processedBlocks" :key="index">
       <!-- Mermaid 图表 -->
       <MermaidRenderer 
@@ -27,21 +27,19 @@
         v-else-if="block.type === 'markdown'"
         class="markdown-block"
         v-html="block.content"
+        ref="mathElements"
       ></div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted, nextTick, watch } from 'vue'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 import markdownItTaskLists from 'markdown-it-task-lists'
 import markdownItTOC from 'markdown-it-table-of-contents'
-import markdownItTexmath from 'markdown-it-texmath'
-import katex from 'katex'
-import 'katex/dist/katex.min.css'
 import MermaidRenderer from './MermaidRenderer.vue'
 import ChartRenderer from './ChartRenderer.vue'
 import PlantUMLRenderer from './PlantUMLRenderer.vue'
@@ -55,18 +53,89 @@ const props = withDefaults(defineProps<Props>(), {
   mermaidTheme: 'default'
 })
 
-// 生成唯一代码ID
-const codeIdCounter = ref(0)
-const generateCodeId = (): string => {
-  return `code-${++codeIdCounter.value}-${Date.now()}`
+const mathElements = ref<HTMLElement[]>([])
+
+// 动态加载 MathJax 脚本
+const loadMathJaxScript = async (): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    // 检查是否已经加载
+    if (window.MathJax) {
+      resolve()
+      return
+    }
+
+    // 配置 MathJax
+    window.MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']],
+        processEscapes: true,
+        processEnvironments: true,
+        packages: {'[+]': ['base', 'ams', 'noerrors', 'noundefined']}
+      },
+      loader: {
+        load: ['[tex]/ams', '[tex]/newcommand']
+      },
+      options: {
+        skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+        ignoreHtmlClass: 'tex2jax_ignore',
+        processHtmlClass: 'tex2jax_process',
+        // 禁用语音探索器以避免加载错误
+        sre: {
+          speech: false
+        }
+      },
+      startup: {
+        typeset: false,
+        ready: () => {
+          MathJax.startup.defaultReady()
+          resolve()
+        }
+      }
+    }
+
+    // 创建并加载 MathJax 脚本
+    const script = document.createElement('script')
+    script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js'
+    script.async = true
+    script.onload = () => {
+      // 等待 MathJax 完全初始化
+      if (window.MathJax && window.MathJax.startup && window.MathJax.startup.promise) {
+        window.MathJax.startup.promise.then(() => {
+          resolve()
+        }).catch(err => {
+          console.error('MathJax 初始化失败:', err)
+          reject(err)
+        })
+      } else {
+        resolve()
+      }
+    }
+    script.onerror = (err) => {
+      console.error('MathJax 脚本加载失败:', err)
+      reject(err)
+    }
+    document.head.appendChild(script)
+  })
+}
+
+// 加载 MathJax
+const loadMathJax = async () => {
+  if (!window.MathJax || !window.MathJax.typesetPromise) {
+    try {
+      await loadMathJaxScript()
+    } catch (error) {
+      console.error('MathJax 加载失败:', error)
+    }
+  }
 }
 
 // 创建markdown-it实例
 const md = new MarkdownIt({
-  html: true,        // 允许HTML标签
-  linkify: true,     // 自动将URL转换为链接
-  typographer: true, // 启用印刷美化
-  breaks: false,     // 禁用自动转换换行符，避免干扰数学公式
+  html: true,
+  linkify: true,
+  typographer: true,
+  breaks: false,
   highlight: function (str: string, lang: string) {
     if (lang && hljs.getLanguage(lang)) {
       try {
@@ -98,83 +167,21 @@ md.use(markdownItTOC, {
   }
 })
 
-// 添加数学公式支持
-md.use(markdownItTexmath, {
-  engine: katex,
-  delimiters: ['dollars', 'brackets'],
-  katexOptions: {
-    throwOnError: false,
-    errorColor: '#cc0000',
-    strict: false,
-  }
-})
+// 自定义列表项渲染规则
+md.renderer.rules.list_item_open = (tokens: any, idx: number): string => '<li>'
+md.renderer.rules.list_item_close = (tokens: any, idx: number): string => '</li>'
 
-// 自定义列表项渲染规则，确保列表项内容不换行
-md.renderer.rules.list_item_open = (tokens: any, idx: number): string => {
-  return '<li>'
-}
-
-md.renderer.rules.list_item_close = (tokens: any, idx: number): string => {
-  return '</li>'
-}
-
-// 自定义段落渲染规则，在列表项中的段落不换行
+// 自定义段落渲染规则
 md.renderer.rules.paragraph_open = (tokens: any, idx: number, options: any, env: any, renderer: any): string => {
-  // 检查是否在列表项中
   const parentTokens = tokens.slice(0, idx).reverse()
   const isInListItem = parentTokens.some((token: any) => token.type === 'list_item_open')
-  
-  if (isInListItem) {
-    return '<span style="display: inline;">'
-  }
-  return '<p>'
+  return isInListItem ? '<span style="display: inline;">' : '<p>'
 }
 
 md.renderer.rules.paragraph_close = (tokens: any, idx: number, options: any, env: any, renderer: any): string => {
-  // 检查是否在列表项中
   const parentTokens = tokens.slice(0, idx).reverse()
   const isInListItem = parentTokens.some((token: any) => token.type === 'list_item_open')
-  
-  if (isInListItem) {
-    return '</span>'
-  }
-  return '</p>'
-}
-
-// 自定义代码块渲染规则，添加工具栏
-md.renderer.rules.fence = (tokens: any, idx: number, options: any, env: any, renderer: any): string => {
-  const token = tokens[idx]
-  const langName = token.info ? md.utils.escapeHtml(token.info.trim()) : ''
-  const langClass = langName ? ` class="hljs language-${langName}"` : ' class="hljs"'
-  const codeId = generateCodeId()
-  
-  let highlighted = token.content
-  if (langName && hljs.getLanguage(langName)) {
-    try {
-      highlighted = hljs.highlight(token.content, { language: langName, ignoreIllegals: true }).value
-    } catch (err) {
-      console.warn('代码高亮失败:', err)
-    }
-  } else if (!langName) {
-    try {
-      highlighted = hljs.highlightAuto(token.content).value
-    } catch (err) {
-      console.warn('自动代码高亮失败:', err)
-    }
-  }
-  
-  return `<div class="code-block-container">
-    <div class="code-toolbar">
-      <span class="code-language">${langName || 'text'}</span>
-      <button class="copy-button" onclick="copyCode('${codeId}')" title="复制代码">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-        </svg>
-      </button>
-    </div>
-    <pre class="hljs"><code id="${codeId}"${langClass}>${highlighted}</code></pre>
-  </div>`
+  return isInListItem ? '</span>' : '</p>'
 }
 
 // 自定义渲染规则，处理行内代码
@@ -182,7 +189,6 @@ md.renderer.rules.code_inline = (tokens: any, idx: number): string => {
   const token = tokens[idx]
   const code = token.content
   
-  // 尝试检测语言类型
   const detectedLang = detectLanguage(code.trim())
   
   if (detectedLang && hljs.getLanguage(detectedLang)) {
@@ -194,7 +200,6 @@ md.renderer.rules.code_inline = (tokens: any, idx: number): string => {
     }
   }
   
-  // 如果无法检测语言，使用自动检测
   try {
     const highlighted = hljs.highlightAuto(code.trim()).value
     return `<code class="hljs">${highlighted}</code>`
@@ -206,68 +211,35 @@ md.renderer.rules.code_inline = (tokens: any, idx: number): string => {
 
 // 简单的语言检测函数
 function detectLanguage(code: string): string | null {
-  // JavaScript 检测
   if (/function\s+\w+|const\s+\w+\s*=|let\s+\w+\s*=|var\s+\w+\s*=|=>|\{.*\}|\[\]|\.\w+|console\.|require\(|import\s+/.test(code)) {
     return 'javascript'
   }
   
-  // Java 检测
   if (/public\s+class|private\s+\w+\s+\w+|public\s+static\s+void|System\.out\.println|String\[\]\s+args|new\s+\w+\(\)|@Override/.test(code)) {
     return 'java'
   }
   
-  // Python 检测
   if (/def\s+\w+|import\s+\w+|from\s+\w+\s+import|print\(|if\s+__name__\s*==\s*['"]__main__['"]|:\s*\n/.test(code)) {
     return 'python'
   }
   
-  // CSS 检测
   if (/\{\s*[\w-]+:\s*[^}]+\}|\.[\w-]+\s*\{|#[\w-]+\s*\{|@media|@import/.test(code)) {
     return 'css'
   }
   
-  // HTML 检测
   if (/&lt;\/?\w+[^&gt;]*&gt;|&lt;div|&lt;span|&lt;p|&lt;h[1-6]|class=|id=/.test(code)) {
     return 'html'
   }
   
-  // SQL 检测
   if (/SELECT\s+.*\s+FROM|INSERT\s+INTO|UPDATE\s+.*\s+SET|DELETE\s+FROM|CREATE\s+TABLE|DROP\s+TABLE/i.test(code)) {
     return 'sql'
   }
   
-  // JSON 检测
   if (/^\s*\{.*\}\s*$|^\s*\[.*\]\s*$/.test(code) && code.includes(':') && (code.includes('"') || code.includes("'"))) {
     return 'json'
   }
   
   return null
-}
-
-
-// 添加全局复制函数
-if (typeof window !== 'undefined') {
-  (window as any).copyCode = async (codeId: string) => {
-    try {
-      const codeElement = document.getElementById(codeId)
-      if (codeElement) {
-        await navigator.clipboard.writeText(codeElement.textContent || '')
-        // 可以添加成功提示
-        const button = codeElement.closest('.code-block-container')?.querySelector('.copy-button')
-        if (button) {
-          const originalHTML = button.innerHTML
-          button.innerHTML = '✓'
-          button.style.color = '#10b981'
-          setTimeout(() => {
-            button.innerHTML = originalHTML
-            button.style.color = ''
-          }, 2000)
-        }
-      }
-    } catch (err) {
-      console.error('复制失败:', err)
-    }
-  }
 }
 
 // 处理内容，分离图表和普通 Markdown
@@ -282,7 +254,6 @@ const processedBlocks = computed(() => {
     options?: any
   }> = []
   
-  // 分割内容为行
   const lines = props.content.split('\n')
   let currentMarkdownLines: string[] = []
   let inMermaidBlock = false
@@ -293,9 +264,7 @@ const processedBlocks = computed(() => {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim()
     
-    // 检测 Mermaid 代码块
     if (line === '```mermaid') {
-      // 保存之前的 Markdown 内容
       if (currentMarkdownLines.length > 0) {
         const markdownContent = currentMarkdownLines.join('\n')
         blocks.push({
@@ -318,9 +287,7 @@ const processedBlocks = computed(() => {
       continue
     }
     
-    // 检测 PlantUML 代码块
     if (line === '```plantuml' || line === '```puml') {
-      // 保存之前的 Markdown 内容
       if (currentMarkdownLines.length > 0) {
         const markdownContent = currentMarkdownLines.join('\n')
         blocks.push({
@@ -343,9 +310,7 @@ const processedBlocks = computed(() => {
       continue
     }
     
-    // 检测 Chart.js 代码块
     if (line === '```chart') {
-      // 保存之前的 Markdown 内容
       if (currentMarkdownLines.length > 0) {
         const markdownContent = currentMarkdownLines.join('\n')
         blocks.push({
@@ -369,7 +334,6 @@ const processedBlocks = computed(() => {
         })
       } catch (error) {
         console.error('图表配置解析错误:', error)
-        // 将错误信息作为 Markdown 显示
         blocks.push({
           type: 'markdown',
           content: `<div class="error">图表配置错误: ${error}</div>`
@@ -378,7 +342,6 @@ const processedBlocks = computed(() => {
       continue
     }
     
-    // 收集内容
     if (inMermaidBlock || inPlantUMLBlock || inChartBlock) {
       chartContent += lines[i] + '\n'
     } else {
@@ -386,7 +349,6 @@ const processedBlocks = computed(() => {
     }
   }
   
-  // 处理最后的 Markdown 内容
   if (currentMarkdownLines.length > 0) {
     const markdownContent = currentMarkdownLines.join('\n')
     blocks.push({
@@ -400,66 +362,55 @@ const processedBlocks = computed(() => {
 
 // 渲染 Markdown 内容
 const renderMarkdown = (content: string): string => {
-  console.log(content)
-  
-  // 更智能的预处理：只处理数学公式外的HTML标签
   let processedContent = content
   
-  // 首先，保护数学公式区域
+  // 保护数学公式区域，避免被HTML处理影响
   const formulaRegex = /(\$\$.*?\$\$|\\\[.*?\\\]|\\\(.*?\\\)|\$.*?\$)/gs
   const parts: string[] = []
   let lastIndex = 0
   let match
   
   while ((match = formulaRegex.exec(content)) !== null) {
-    // 添加公式前的文本
     if (match.index > lastIndex) {
       const textBefore = content.slice(lastIndex, match.index)
-      // 只对非公式区域进行HTML标签清理
       parts.push(textBefore
-        .replace(/<br[^>]*>/g, '\n') // 将<br>替换为换行符
-        .replace(/&nbsp;/g, ' ') // 替换不间断空格
+        .replace(/<br[^>]*>/g, '\n')
+        .replace(/&nbsp;/g, ' ')
       )
     }
-    // 添加公式本身（不进行任何处理）
     parts.push(match[0])
     lastIndex = formulaRegex.lastIndex
   }
   
-  // 添加最后一段文本
   if (lastIndex < content.length) {
     const textAfter = content.slice(lastIndex)
     parts.push(textAfter
-      .replace(/<br[^>]*>/g, '\n') // 将<br>替换为换行符
-      .replace(/&nbsp;/g, ' ') // 替换不间断空格
+      .replace(/<br[^>]*>/g, '\n')
+      .replace(/&nbsp;/g, ' ')
     )
   }
   
-  // 如果没有匹配到公式，使用原始内容
   if (parts.length === 0) {
     processedContent = content
-      .replace(/<br[^>]*>/g, '\n') // 将<br>替换为换行符
-      .replace(/&nbsp;/g, ' ') // 替换不间断空格
+      .replace(/<br[^>]*>/g, '\n')
+      .replace(/&nbsp;/g, ' ')
   } else {
     processedContent = parts.join('')
   }
   
-  return md.render(processedContent).replace(/\\cdotp/g, '.')
+  return md.render(processedContent)
 }
 
 // 解析图表配置
 const parseChartConfig = (configText: string) => {
   try {
-    // 尝试解析 JSON 配置
     const config = JSON.parse(configText)
-    
     return {
       data: config.data,
       chartType: config.type || 'bar',
       options: config.options || {}
     }
   } catch (error) {
-    // 如果不是 JSON，尝试解析简单的文本格式
     const lines = configText.split('\n')
     const config: any = {
       type: 'bar',
@@ -510,10 +461,56 @@ const parseChartConfig = (configText: string) => {
     }
   }
 }
+
+// 渲染 MathJax
+const renderMathJax = async () => {
+  await loadMathJax()
+  await nextTick()
+  
+  // 等待一下确保 DOM 完全更新
+  await new Promise(resolve => setTimeout(resolve, 300))
+  
+  if (window.MathJax) {
+    try {
+      // 如果有 mathElements，只渲染这些元素
+      if (mathElements.value.length > 0) {
+        if (window.MathJax.typesetPromise) {
+          await window.MathJax.typesetPromise(mathElements.value)
+        } else if (window.MathJax.typeset) {
+          window.MathJax.typeset(mathElements.value)
+        }
+      } else {
+        // 如果没有特定元素，渲染整个文档
+        if (window.MathJax.typesetPromise) {
+          await window.MathJax.typesetPromise()
+        } else if (window.MathJax.typeset) {
+          window.MathJax.typeset()
+        }
+      }
+    } catch (error) {
+      console.error('MathJax 渲染错误:', error)
+    }
+  }
+}
+
+onMounted(() => {
+  renderMathJax()
+})
+
+watch(() => props.content, () => {
+  renderMathJax()
+}, { deep: true })
+
+// 扩展 Window 接口
+declare global {
+  interface Window {
+    MathJax: any
+  }
+}
 </script>
 
 <style scoped>
-.enhanced-markdown-content {
+.mathjax-content {
   line-height: 1.6;
   color: #1f2937;
 }
@@ -532,7 +529,7 @@ const parseChartConfig = (configText: string) => {
   margin: 1rem 0;
 }
 
-/* 继承原有的 Markdown 样式 */
+/* Markdown 样式 */
 .markdown-block :deep(h1),
 .markdown-block :deep(h2),
 .markdown-block :deep(h3),
@@ -576,7 +573,6 @@ const parseChartConfig = (configText: string) => {
   line-height: 1.6;
 }
 
-/* 嵌套列表样式 */
 .markdown-block :deep(ul ul),
 .markdown-block :deep(ol ol),
 .markdown-block :deep(ul ol),
@@ -593,7 +589,6 @@ const parseChartConfig = (configText: string) => {
   list-style-type: square;
 }
 
-/* 行内代码样式 */
 .markdown-block :deep(code:not(.hljs)) {
   background-color: #f1f5f9;
   padding: 0.2em 0.4em;
@@ -603,7 +598,6 @@ const parseChartConfig = (configText: string) => {
   color: #1f2937;
 }
 
-/* 代码块样式 */
 .markdown-block :deep(pre) {
   background-color: #f6f8fa;
   border: 1px solid #d0d7de;
@@ -622,7 +616,6 @@ const parseChartConfig = (configText: string) => {
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
 }
 
-/* 行内代码高亮样式 */
 .markdown-block :deep(code.hljs) {
   background-color: #f1f5f9;
   padding: 0.2em 0.4em;
@@ -633,7 +626,6 @@ const parseChartConfig = (configText: string) => {
   display: inline;
 }
 
-/* 任务列表样式 */
 .markdown-block :deep(.task-list-item) {
   list-style: none;
   margin-left: -1.5em;
@@ -643,7 +635,6 @@ const parseChartConfig = (configText: string) => {
   margin-right: 0.5em;
 }
 
-/* 引用块样式 */
 .markdown-block :deep(blockquote) {
   border-left: 4px solid #d0d7de;
   padding: 0 1em;
@@ -657,7 +648,6 @@ const parseChartConfig = (configText: string) => {
   margin: 0.5em 0;
 }
 
-/* 表格样式 */
 .markdown-block :deep(table) {
   border-collapse: collapse;
   width: 100%;
@@ -681,7 +671,6 @@ const parseChartConfig = (configText: string) => {
   background-color: #f6f8fa;
 }
 
-/* 链接样式 */
 .markdown-block :deep(a) {
   color: #0969da;
   text-decoration: none;
@@ -692,14 +681,12 @@ const parseChartConfig = (configText: string) => {
   color: #0550ae;
 }
 
-/* 水平线样式 */
 .markdown-block :deep(hr) {
   border: none;
   border-top: 1px solid #d0d7de;
   margin: 2em 0;
 }
 
-/* 图片样式 */
 .markdown-block :deep(img) {
   max-width: 100%;
   height: auto;
@@ -707,7 +694,6 @@ const parseChartConfig = (configText: string) => {
   margin: 0.5em 0;
 }
 
-/* 目录样式 */
 .markdown-block :deep(.table-of-contents) {
   background: #f6f8fa;
   border: 1px solid #d0d7de;
@@ -725,22 +711,27 @@ const parseChartConfig = (configText: string) => {
   margin: 0.2em 0;
 }
 
-/* 代码块深色主题覆盖 */
 .markdown-block :deep(.hljs) {
   background: #f6f8fa !important;
   color: #1f2937 !important;
 }
-/* 数学公式样式 */
-.markdown-block :deep(.katex) {
+
+/* MathJax 样式 */
+.markdown-block :deep(.MathJax) {
   font-size: 1.1em;
 }
 
-.markdown-block :deep(.katex-display) {
+.markdown-block :deep(.MathJax_Display) {
   margin: 1em 0;
   text-align: center;
 }
 
-.markdown-block :deep(.katex-error) {
+.markdown-block :deep(.MathJax_Error) {
   color: #ff4757;
+}
+
+.math-display {
+  margin: 1em 0;
+  text-align: center;
 }
 </style>

@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>测试复杂数学公式解析</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .test-case {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .input {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 3px;
+            margin-bottom: 10px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .output {
+            background: #e8f4f8;
+            padding: 10px;
+            border-radius: 3px;
+            margin-bottom: 10px;
+            min-height: 50px;
+        }
+        .error {
+            color: #d32f2f;
+            background: #ffebee;
+            padding: 10px;
+            border-radius: 3px;
+            margin: 10px 0;
+        }
+        .success {
+            color: #388e3c;
+            background: #e8f5e8;
+            padding: 10px;
+            border-radius: 3px;
+            margin: 10px 0;
+        }
+        .debug {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 3px;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>测试复杂数学公式解析</h1>
+    
+    <div class="test-case">
+        <h3>你的公式：</h3>
+        <div class="input">
+            <strong>原始输入:</strong> 
+            [\boxed{\mathbf{F}_{12}= -,G,\frac{m_{1}m_{2}}{r^{3}};\mathbf{r}}
+            \qquad\text{或}\qquad
+            |\mathbf{F}_{12}|=G\frac{m_{1}m_{2}}{r^{2}}]
+        </div>
+        <div class="output" id="output1"></div>
+        <div class="debug">
+            <strong>问题分析:</strong> 这个公式包含：
+            1. \boxed{} - 框住公式
+            2. \mathbf{} - 粗体
+            3. _{12} - 下标
+            4. \frac{}{} - 分数
+            5. \qquad - 大间距
+            6. \text{} - 文本模式
+            7. 多个逗号和分号
+        </div>
+    </div>
+    
+    <div class="test-case">
+        <h3>分步测试：</h3>
+        
+        <div class="input">
+            <strong>测试1: 简单的 \boxed{}</strong>
+            $\boxed{x = y}$
+        </div>
+        <div class="output" id="output2"></div>
+        
+        <div class="input">
+            <strong>测试2: 带下标的向量</strong>
+            $\mathbf{F}_{12}$
+        </div>
+        <div class="output" id="output3"></div>
+        
+        <div class="input">
+            <strong>测试3: 分数和间距</strong>
+            $\frac{m_{1}m_{2}}{r^{3}} \qquad \text{或}$
+        </div>
+        <div class="output" id="output4"></div>
+        
+        <div class="input">
+            <strong>测试4: 绝对值</strong>
+            $|\mathbf{F}_{12}|$
+        </div>
+        <div class="output" id="output5"></div>
+        
+        <div class="input">
+            <strong>测试5: 完整的简化版</strong>
+            $\boxed{\mathbf{F}_{12} = G\frac{m_{1}m_{2}}{r^{2}}}$
+        </div>
+        <div class="output" id="output6"></div>
+    </div>
+    
+    <div class="test-case">
+        <h3>问题诊断：</h3>
+        <div class="input">
+            <strong>可能的问题:</strong>
+            1. 公式中的逗号和分号可能被误解
+            2. \boxed{} 可能需要特定宏包
+            3. 预处理可能破坏了公式结构
+            4. KaTeX 配置可能需要调整
+        </div>
+        <div class="output" id="diagnosis"></div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script>
+        // 测试用例
+        const tests = [
+            {
+                id: 'output1',
+                tex: '\\boxed{\\mathbf{F}_{12}= -,G,\\frac{m_{1}m_{2}}{r^{3}};\\mathbf{r}}\\qquad\\text{或}\\qquad|\\mathbf{F}_{12}|=G\\frac{m_{1}m_{2}}{r^{2}}',
+                displayMode: true
+            },
+            {
+                id: 'output2',
+                tex: '\\boxed{x = y}',
+                displayMode: false
+            },
+            {
+                id: 'output3',
+                tex: '\\mathbf{F}_{12}',
+                displayMode: false
+            },
+            {
+                id: 'output4',
+                tex: '\\frac{m_{1}m_{2}}{r^{3}} \\qquad \\text{或}',
+                displayMode: false
+            },
+            {
+                id: 'output5',
+                tex: '|\\mathbf{F}_{12}|',
+                displayMode: false
+            },
+            {
+                id: 'output6',
+                tex: '\\boxed{\\mathbf{F}_{12} = G\\frac{m_{1}m_{2}}{r^{2}}}',
+                displayMode: true
+            }
+        ];
+        
+        // 运行测试
+        let diagnosis = '';
+        
+        tests.forEach(test => {
+            try {
+                const html = katex.renderToString(test.tex, {
+                    displayMode: test.displayMode,
+                    throwOnError: false,
+                    errorColor: '#cc0000',
+                    strict: false,
+                    macros: {
+                        '\\boxed': '\\fbox{${#1}}'  // 定义 \boxed 宏
+                    }
+                });
+                document.getElementById(test.id).innerHTML = html;
+                console.log(`测试 ${test.id} 成功:`, test.tex);
+            } catch (error) {
+                document.getElementById(test.id).innerHTML = 
+                    `<div class="error">错误: ${error.message}</div>`;
+                console.error(`测试 ${test.id} 失败:`, error.message);
+                diagnosis += `<div>${test.id}: ${error.message}</div>`;
+            }
+        });
+        
+        // 显示诊断信息
+        if (diagnosis) {
+            document.getElementById('diagnosis').innerHTML = 
+                `<div class="error">${diagnosis}</div>`;
+        } else {
+            document.getElementById('diagnosis').innerHTML = 
+                `<div class="success">所有测试通过！问题可能在其他地方。</div>`;
+        }
+        
+        // 测试原始公式的不同变体
+        console.log('=== 原始公式分析 ===');
+        const original = '\\boxed{\\mathbf{F}_{12}= -,G,\\frac{m_{1}m_{2}}{r^{3}};\\mathbf{r}}\\qquad\\text{或}\\qquad|\\mathbf{F}_{12}|=G\\frac{m_{1}m_{2}}{r^{2}}';
+        
+        // 尝试分段解析
+        const parts = [
+            '\\boxed{',
+            '\\mathbf{F}_{12}= -,G,',
+            '\\frac{m_{1}m_{2}}{r^{3}};',
+            '\\mathbf{r}',
+            '}',
+            '\\qquad',
+            '\\text{或}',
+            '\\qquad',
+            '|\\mathbf{F}_{12}|=G\\frac{m_{1}m_{2}}{r^{2}}'
+        ];
+        
+        console.log('公式分段:', parts);
+        
+        // 检查可能的问题字符
+        console.log('可能的问题:');
+        console.log('1. 逗号后的空格: ', original.includes(', '));
+        console.log('2. 分号后的空格: ', original.includes('; '));
+        console.log('3. 负号格式: ', original.includes('-,'));
+        
+        // 尝试修复的版本
+        const fixedVersions = [
+            {
+                name: '移除多余空格',
+                tex: original.replace(/, /g, ',').replace(/; /g, ';')
+            },
+            {
+                name: '简化公式',
+                tex: '\\boxed{\\mathbf{F}_{12} = -G\\frac{m_{1}m_{2}}{r^{3}}\\mathbf{r}}\\qquad\\text{或}\\qquad|\\mathbf{F}_{12}|=G\\frac{m_{1}m_{2}}{r^{2}}'
+            },
+            {
+                name: '分开两个公式',
+                tex: '\\boxed{\\mathbf{F}_{12} = -G\\frac{m_{1}m_{2}}{r^{3}}\\mathbf{r}} \\quad \\text{或} \\quad |\\mathbf{F}_{12}|=G\\frac{m_{1}m_{2}}{r^{2}}'
+            }
+        ];
+        
+        console.log('修复建议:', fixedVersions);
+    </script>
+</body>
+</html>

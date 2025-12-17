@@ -111,6 +111,11 @@
               图表
             </button>
           </div>
+          <button class="header-button" title="数学公式对比" @click="goToMathComparison">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 11H3v2h6v-2zm0-4H3v2h6V7zm0 8H3v2h6v-2zm12-8h-6v2h6V7zm0 4h-6v2h6v-2zm0 4h-6v2h6v-2z"></path>
+            </svg>
+          </button>
           <button class="header-button" title="设置">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="3"></circle>
@@ -353,6 +358,7 @@
 
 <script setup lang="ts">
 import { ref, nextTick, onMounted, onUnmounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { askQuestionStream, askQuestionStreamWithFiles } from '@/services/api'
 import FileProcessor from '@/services/fileProcessor'
 import { ErrorHandler } from '@/utils/errorHandler'
@@ -361,6 +367,7 @@ import MarkdownRenderer from './MarkdownRenderer.vue'
 import MarkdownItRenderer from './MarkdownItRenderer.vue'
 import MarkdownComparison from './MarkdownComparison.vue'
 import EnhancedMarkdownRenderer from './EnhancedMarkdownRenderer.vue'
+import MathJaxRenderer from './MathJaxRenderer.vue'
 
 interface Message {
   type: 'user' | 'assistant'
@@ -368,6 +375,7 @@ interface Message {
   timestamp: Date
 }
 
+const router = useRouter()
 const messages = ref<Message[]>([])
 const currentMessage = ref('')
 const isLoading = ref(false)
@@ -642,6 +650,10 @@ const deleteSession = async (sessionId: string, event: Event) => {
       console.error('删除会话失败:', error)
     }
   }
+}
+
+const goToMathComparison = () => {
+  router.push('/math-comparison')
 }
 
 const usePrompt = (prompt: string) => {

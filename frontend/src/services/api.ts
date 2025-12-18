@@ -297,4 +297,57 @@ export const getSessionMessages = async (sessionId: string): Promise<Message[]> 
   }
 }
 
+// API提供商相关接口
+
+export interface APIProviderConfig {
+  useLangchain: boolean;
+  apiProvider: string;
+  isConfigured: boolean;
+  availableProviders: string[];
+}
+
+export interface SwitchProviderRequest {
+  provider: string;
+}
+
+export interface SwitchProviderResponse {
+  success: boolean;
+  message: string;
+  config: APIProviderConfig;
+}
+
+export interface AvailableProvidersResponse {
+  providers: string[];
+}
+
+export const getAPIProviderConfig = async (): Promise<APIProviderConfig> => {
+  try {
+    const response = await api.get('/api-provider/config');
+    return response.data;
+  } catch (error) {
+    console.error('获取API提供商配置失败:', error);
+    throw error;
+  }
+};
+
+export const switchAPIProvider = async (provider: string): Promise<SwitchProviderResponse> => {
+  try {
+    const response = await api.post('/api-provider/switch', { provider });
+    return response.data;
+  } catch (error) {
+    console.error('切换API提供商失败:', error);
+    throw error;
+  }
+};
+
+export const getAvailableAPIProviders = async (): Promise<AvailableProvidersResponse> => {
+  try {
+    const response = await api.get('/api-provider/available');
+    return response.data;
+  } catch (error) {
+    console.error('获取可用API提供商失败:', error);
+    throw error;
+  }
+};
+
 export default api

@@ -7,9 +7,13 @@ const { testConnection, initDatabase } = require('./config/database');
 const sessionService = require('./services/sessionService');
 const { upload, FileProcessor } = require('./services/fileProcessor');
 const { PromptManager } = require('./promptManager');
+const { LangchainService } = require('./services/langchainService');
 // 初始化提示词管理器
 const promptManager = new PromptManager();
 promptManager.loadTemplate();
+
+// 初始化Langchain服务
+const langchainService = new LangchainService();
 
 
 
@@ -165,17 +169,25 @@ app.post('/api/ask', async (req, res) => {
 
 // “请用标准的 LaTeX 数学公式格式输出化学方程式，使用 $...$ 或 $$...$$ 包裹。
 
-    const response = await axios.post(`${OLLAMA_API_URL}/api/generate`, {
-      model: model,
-      prompt: prompt,
-      stream: false
-    });
+    let answer;
+    if (langchainService.isUsingLangchain()) {
+      // 使用LangChain API
+      answer = await langchainService.answerQuestion(question, contextPrompt, model);
+    } else {
+      // 使用Ollama API
+      const response = await axios.post(`${OLLAMA_API_URL}/api/generate`, {
+        model: model,
+        prompt: prompt,
+        stream: false
+      });
+      answer = response.data.response;
+    }
 
     // 保存用户问题和助手回答到数据库
     if (sessionId) {
       try {
         await sessionService.addMessage(sessionId, 'user', question);
-        await sessionService.addMessage(sessionId, 'assistant', response.data.response);
+        await sessionService.addMessage(sessionId, 'assistant', answer);
       } catch (error) {
         console.error('保存消息失败:', error);
       }
@@ -183,7 +195,7 @@ app.post('/api/ask', async (req, res) => {
 
     res.json({
       question: question,
-      answer: response.data.response,
+      answer: answer,
       model: model,
       sessionId: sessionId
     });
@@ -223,62 +235,6 @@ app.post('/api/ask-stream', async (req, res) => {
       }
     }
     const prompt = promptManager.generatePrompt(question);
-//     const prompt = `你是一位资深的技术专家，请详细、准确地回答以下技术问题。回答要专业、实用，并包含相关的代码示例或最佳实践建议。${contextPrompt}
-// 当前问题：${question}
-
-// 同时，你是PlantUML专家，如果我要求你根据我的需求生成 PlantUML 代码，请根据我的需求生成正确的 PlantUML 代码。
-//                 简单三步生成规则：
-
-//                 1. 先判断图表类型
-//                 - 画类、接口、继承 → 用类图
-//                 - 画流程、步骤、判断 → 用活动图
-//                 - 画消息、调用顺序 → 用时序图
-//                 - 画组件、服务、模块 → 用组件图
-//                 - 画思维、脑图、分类 → 用思维导图
-//                 - 画任务、时间、进度 → 用甘特图
-//                 - 画界面、UI、布局 → 用线框图
-
-//                 2. 用正确的语法开头
-//                 - 类图：@startuml
-//                 - 时序图：@startuml sequence
-//                 - 活动图：@startuml activity
-//                 - 思维导图：@startmindmap
-//                 - 甘特图：@startgantt
-//                 - 线框图：@startwireframe
-
-//                 ### 3. 避免常见错误
-//                 - ❌ 不要混用箭头：类图用 -->，时序图用 ->
-//                 - ❌ 不要忘记结束标记：@enduml 或 @end...
-//                 - ❌ 不要缺少大括号：class Name { 内容 }
-//                 - ✅ 注释用单引号：'这是注释'
-//                 - ✅ 字符串用双引号："标签内容"
-
-//                 输出格式
-//                 只输出完整的 PlantUML 代码块，例如：
-
-//                 \`\`\`plantuml
-//                 @startuml
-//                 title 示例
-//                 class User {
-//                     -name: String
-//                 }
-//                 @enduml
-
-// // 请用中文回答。`;
-// const prompt = `你是一位资深的技术专家，请详细、准确地回答提问到的技术问题，回答要专业、实用，
-//                 重要格式规定：
-//                 1.  所有数学公式、化学方程式、物理公式，**必须且只能**使用标准的 LaTeX 表达式。
-//                 2.  绝对禁止使用 \[ ... \] 或 \begin{equation}...\end{equation} 等环境。
-//                 3.  唯一允许的格式是：行内公式用单个美元符号 $...$ 包裹，独立公式用双美元符号 $$...$$ 包裹。
-//                 4.  请在生成最终答案后，自行检查一遍，确保没有出现任何违反此规定的格式。
-//                 如果问题要求输出化学方程式，请用 mhchem 格式输出。
-//                 如果问题要求绘制图表或图像，请用标准的plantUML语法，例如：@startuml ... @enduml，要保证没有语法错误。
-//                 当前问题：${question}
-//                 请严格遵守以上格式规定。`
-//                   // 如果问题涉及化学方程式、数学公式、物理公式等，请用标准的 LaTeX 数学公式格式输出，使用 $...$ 或 $$...$$ 包裹，如果输出有 \[ ... \] 或 \[ ... \] 包裹，也需要用 $...$ 或 $$...$$ 替换掉。
-//                   // 如果问题要求绘制图表或图像，请用标准的plantUML语法，例如：@startuml ... @enduml，要保证没有语法错误。${contextPrompt}
-//                   // 当前问题：${question}
-//                   // 请用中文回答。`;
 
     // 设置SSE响应头
     res.writeHead(200, {
@@ -288,65 +244,108 @@ app.post('/api/ask-stream', async (req, res) => {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Headers': 'Cache-Control'
     });
+    console.log('prompt:', langchainService.isUsingLangchain());
+    if (langchainService.isUsingLangchain()) {
+      console.log('使用LangChain流式API');
+      // 使用LangChain流式API
+      try {
+        const { SystemMessage, HumanMessage } = require('@langchain/core/messages');
+        const messages = [
+          new SystemMessage("你是一位资深的技术专家，请详细、准确地回答提问到的技术问题，回答要专业、实用，如果回答内容涉及化学方程式、数学公式、物理公式等，请用标准的 LaTeX 数学公式格式输出，使用 $...$ 或 $...$ 包裹，如果问题要求绘制图表或图像，请用标准的plantUML语法。请用中文回答。"),
+          new HumanMessage(prompt)
+        ];
 
-    try {
-      const response = await axios.post(`${OLLAMA_API_URL}/api/generate`, {
-        model: model,
-        prompt: prompt,
-        stream: true
-      }, {
-        responseType: 'stream'
-      });
+        const chatInstance = langchainService.getChatInstance();
+        const stream = await chatInstance.stream(messages);
 
-      response.data.on('data', (chunk) => {
-        const lines = chunk.toString().split('\n').filter(line => line.trim());
-        
-        for (const line of lines) {
-          try {
-            const data = JSON.parse(line);
-            if (data.response) {
-              fullAnswer += data.response;
-              // 发送SSE格式的数据
-              res.write(`data: ${JSON.stringify({ content: data.response })}\n\n`);
-            }
-            
-            // 如果响应完成，发送结束信号并保存消息
-            if (data.done) {
-              // 保存用户问题和助手回答到数据库
-              if (sessionId) {
-                sessionService.addMessage(sessionId, 'user', question).catch(err => {
-                  console.error('保存用户消息失败:', err);
-                });
-                sessionService.addMessage(sessionId, 'assistant', fullAnswer).catch(err => {
-                  console.error('保存助手消息失败:', err);
-                });
-              }
-              
-              res.write('data: [DONE]\n\n');
-              res.end();
-              return;
-            }
-          } catch (e) {
-            console.error('解析流数据失败:', e);
+        let fullAnswer = '';
+        for await (const chunk of stream) {
+          const content = chunk.content;
+          if (content) {
+            fullAnswer += content;
+            // 发送SSE格式的数据
+            res.write(`data: ${JSON.stringify({ content: content })}\n\n`);
           }
         }
-      });
 
-      response.data.on('error', (error) => {
-        console.error('流响应错误:', error);
-        res.write(`data: ${JSON.stringify({ error: '流式响应发生错误' })}\n\n`);
-        res.end();
-      });
+        // 保存用户问题和助手回答到数据库
+        if (sessionId) {
+          sessionService.addMessage(sessionId, 'user', question).catch(err => {
+            console.error('保存用户消息失败:', err);
+          });
+          sessionService.addMessage(sessionId, 'assistant', fullAnswer).catch(err => {
+            console.error('保存助手消息失败:', err);
+          });
+        }
 
-      response.data.on('end', () => {
         res.write('data: [DONE]\n\n');
         res.end();
-      });
+      } catch (streamError) {
+        console.error('LangChain流式请求失败:', streamError);
+        res.write(`data: ${JSON.stringify({ error: 'LangChain流式请求失败' })}\n\n`);
+        res.end();
+      }
+    } else {
+      // 使用Ollama流式API
+      try {
+        const response = await axios.post(`${OLLAMA_API_URL}/api/generate`, {
+          model: model,
+          prompt: prompt,
+          stream: true
+        }, {
+          responseType: 'stream'
+        });
 
-    } catch (streamError) {
-      console.error('创建流式请求失败:', streamError);
-      res.write(`data: ${JSON.stringify({ error: '创建流式请求失败' })}\n\n`);
-      res.end();
+        response.data.on('data', (chunk) => {
+          const lines = chunk.toString().split('\n').filter(line => line.trim());
+          
+          for (const line of lines) {
+            try {
+              const data = JSON.parse(line);
+              if (data.response) {
+                fullAnswer += data.response;
+                // 发送SSE格式的数据
+                res.write(`data: ${JSON.stringify({ content: data.response })}\n\n`);
+              }
+              
+              // 如果响应完成，发送结束信号并保存消息
+              if (data.done) {
+                // 保存用户问题和助手回答到数据库
+                if (sessionId) {
+                  sessionService.addMessage(sessionId, 'user', question).catch(err => {
+                    console.error('保存用户消息失败:', err);
+                  });
+                  sessionService.addMessage(sessionId, 'assistant', fullAnswer).catch(err => {
+                    console.error('保存助手消息失败:', err);
+                  });
+                }
+                
+                res.write('data: [DONE]\n\n');
+                res.end();
+                return;
+              }
+            } catch (e) {
+              console.error('解析流数据失败:', e);
+            }
+          }
+        });
+
+        response.data.on('error', (error) => {
+          console.error('流响应错误:', error);
+          res.write(`data: ${JSON.stringify({ error: '流式响应发生错误' })}\n\n`);
+          res.end();
+        });
+
+        response.data.on('end', () => {
+          res.write('data: [DONE]\n\n');
+          res.end();
+        });
+
+      } catch (streamError) {
+        console.error('创建流式请求失败:', streamError);
+        res.write(`data: ${JSON.stringify({ error: '创建流式请求失败' })}\n\n`);
+        res.end();
+      }
     }
 
   } catch (error) {
@@ -460,48 +459,91 @@ app.post('/api/ask-stream-with-files', upload.array('files'), async (req, res) =
     'Access-Control-Allow-Headers': 'Cache-Control'
   });
 
-  try {
-    const response = await axios.post(`${OLLAMA_API_URL}/api/generate`, {
-      model: model,
-      prompt: prompt,
-      stream: true
-    }, {
-      responseType: 'stream'
-    });
+  if (langchainService.isUsingLangchain()) {
+    // 使用LangChain流式API
+    try {
+      const { SystemMessage, HumanMessage } = require('@langchain/core/messages');
+      const messages = [
+        new SystemMessage("你是一位资深的技术专家，请详细、准确地回答提问到的技术问题，回答要专业、实用，如果回答内容涉及化学方程式、数学公式、物理公式等，请用标准的 LaTeX 数学公式格式输出，使用 $...$ 或 $...$ 包裹，如果问题要求绘制图表或图像，请用标准的plantUML语法。请用中文回答。"),
+        new HumanMessage(prompt)
+      ];
 
-    response.data.on('data', (chunk) => {
-      const lines = chunk.toString().split('\n').filter(line => line.trim());
-      
-      for (const line of lines) {
-        try {
-          const data = JSON.parse(line);
-          if (data.response) {
-            fullAnswer += data.response;
-            // 发送SSE格式的数据
-            res.write(`data: ${JSON.stringify({ content: data.response })}\n\n`);
-          }
-          
-          // 如果响应完成，发送结束信号并保存消息
-          if (data.done) {
-            // 保存用户问题和助手回答到数据库
-            if (sessionId) {
-              sessionService.addMessage(sessionId, 'user', question).catch(err => {
-                console.error('保存用户消息失败:', err);
-              });
-              sessionService.addMessage(sessionId, 'assistant', fullAnswer).catch(err => {
-                console.error('保存助手消息失败:', err);
-              });
-            }
-            res.write('data: [DONE]\n\n');
-            res.end();
-          }
-        } catch (parseError) {
-          console.error('解析响应数据失败:', parseError);
+      const stream = await chatInstance.stream(messages);
+
+      let fullAnswer = '';
+      for await (const chunk of stream) {
+        const content = chunk.content;
+        if (content) {
+          fullAnswer += content;
+          // 发送SSE格式的数据
+          res.write(`data: ${JSON.stringify({ content: content })}
+
+`);
         }
       }
-    });
 
-    response.data.on('error', (streamError) => {
+      // 保存用户问题和助手回答到数据库
+      if (sessionId) {
+        sessionService.addMessage(sessionId, 'user', question).catch(err => {
+          console.error('保存用户消息失败:', err);
+        });
+        sessionService.addMessage(sessionId, 'assistant', fullAnswer).catch(err => {
+          console.error('保存助手消息失败:', err);
+        });
+      }
+
+      res.write('data: [DONE]\n\n');
+      res.end();
+    } catch (streamError) {
+      console.error('LangChain流式请求失败:', streamError);
+      res.write(`data: ${JSON.stringify({ error: 'LangChain流式请求失败' })}
+
+`);
+      res.end();
+    }
+  } else {
+    try {
+      const response = await axios.post(`${OLLAMA_API_URL}/api/generate`, {
+        model: model,
+        prompt: prompt,
+        stream: true
+      }, {
+        responseType: 'stream'
+      });
+
+      response.data.on('data', (chunk) => {
+        const lines = chunk.toString().split('\n').filter(line => line.trim());
+        
+        for (const line of lines) {
+          try {
+            const data = JSON.parse(line);
+            if (data.response) {
+              fullAnswer += data.response;
+              // 发送SSE格式的数据
+              res.write(`data: ${JSON.stringify({ content: data.response })}\n\n`);
+            }
+            
+            // 如果响应完成，发送结束信号并保存消息
+            if (data.done) {
+              // 保存用户问题和助手回答到数据库
+              if (sessionId) {
+                sessionService.addMessage(sessionId, 'user', question).catch(err => {
+                  console.error('保存用户消息失败:', err);
+                });
+                sessionService.addMessage(sessionId, 'assistant', fullAnswer).catch(err => {
+                  console.error('保存助手消息失败:', err);
+                });
+              }
+              res.write('data: [DONE]\n\n');
+              res.end();
+            }
+          } catch (parseError) {
+            console.error('解析响应数据失败:', parseError);
+          }
+        }
+      });
+
+      response.data.on('error', (streamError) => {
       console.error('流式响应错误:', streamError);
       res.write(`data: ${JSON.stringify({ error: '流式响应错误' })}\n\n`);
       res.end();
@@ -512,12 +554,66 @@ app.post('/api/ask-stream-with-files', upload.array('files'), async (req, res) =
       res.end();
     });
 
-  } catch (streamError) {
-    console.error('创建流式请求失败:', streamError);
-    res.write(`data: ${JSON.stringify({ error: '创建流式请求失败' })}\n\n`);
-    res.end();
+    } catch (streamError) {
+      console.error('创建流式请求失败:', streamError);
+      res.write(`data: ${JSON.stringify({ error: '创建流式请求失败' })}\n\n`);
+      res.end();
+    }
   }
 
+});
+
+// API提供商管理端点
+
+// 获取当前API提供商配置信息
+app.get('/api/api-provider/config', async (req, res) => {
+  try {
+    const configInfo = langchainService.getConfigInfo();
+    res.json(configInfo);
+  } catch (error) {
+    console.error('获取API提供商配置失败:', error);
+    res.status(500).json({ error: '获取配置信息失败' });
+  }
+});
+
+// 切换API提供商
+app.post('/api/api-provider/switch', async (req, res) => {
+  try {
+    const { provider } = req.body;
+    
+    if (!provider) {
+      return res.status(400).json({ error: '请提供API提供商名称' });
+    }
+
+    const success = langchainService.switchProvider(provider);
+    console.log('切换到:', langchainService);
+    if (success) {
+      res.json({ 
+        success: true, 
+        message: `已切换到${provider} API`,
+        config: langchainService.getConfigInfo()
+      });
+    } else {
+      res.status(400).json({ 
+        success: false, 
+        error: `切换到${provider} API失败，请检查配置` 
+      });
+    }
+  } catch (error) {
+    console.error('切换API提供商失败:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 获取可用的API提供商列表
+app.get('/api/api-provider/available', async (req, res) => {
+  try {
+    const availableProviders = langchainService.getAvailableProviders();
+    res.json({ providers: availableProviders });
+  } catch (error) {
+    console.error('获取可用API提供商列表失败:', error);
+    res.status(500).json({ error: '获取提供商列表失败' });
+  }
 });
 
 // 启动服务器

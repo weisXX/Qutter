@@ -111,6 +111,15 @@
               图表
             </button>
           </div>
+                              <div v-if="apiProviderConfig && apiProviderConfig.useLangchain" class="api-provider-selector">
+            <select v-model="selectedProvider" @change="handleProviderChange" class="provider-select" title="选择API提供商">
+              <option value="">API模式</option>
+              <option value="openai">OpenAI</option>
+              <option value="deepseek">DeepSeek</option>
+              <option value="qwen">通义千问</option>
+              <option value="glm">智谱AI</option>
+            </select>
+          </div>
           <button class="header-button" title="数学公式对比" @click="goToMathComparison">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M9 11H3v2h6v-2zm0-4H3v2h6V7zm0 8H3v2h6v-2zm12-8h-6v2h6V7zm0 4h-6v2h6v-2zm0 4h-6v2h6v-2z"></path>
@@ -352,14 +361,19 @@
         </div>
       </div>
       </div>
-    </div>
+      </div>
+      </div>
+  
+  <!-- Toast 提示 -->
+  <div v-if="toastVisible" class="toast" @click="toastVisible = false">
+    {{ toastMessage }}
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { askQuestionStream, askQuestionStreamWithFiles } from '@/services/api'
+import { askQuestionStream, askQuestionStreamWithFiles, getAPIProviderConfig, switchAPIProvider, getAvailableAPIProviders } from '@/services/api'
 import FileProcessor from '@/services/fileProcessor'
 import { ErrorHandler } from '@/utils/errorHandler'
 import { useSessionStore } from '@/stores/session'
@@ -411,6 +425,15 @@ const showSessionList = ref(false)
 
 // 渲染器类型选择
 const rendererType = ref<'marked' | 'markdown-it' | 'comparison' | 'enhanced'>('enhanced')
+
+// API提供商选择状态
+const selectedProvider = ref<string>('')
+const availableProviders = ref<string[]>([])
+const apiProviderConfig = ref<any>(null)
+
+// Toast提示状态
+const toastMessage = ref('')
+const toastVisible = ref(false)
 
 // 监听当前会话变化，加载历史消息
 watch(() => sessionStore.currentSessionId, async (newSessionId) => {
@@ -622,7 +645,27 @@ const sendMessage = async () => {
   }
 }
 
+// 显示toast提示
+const showToast = (message: string, duration: number = 3000) => {
+  toastMessage.value = message;
+  toastVisible.value = true;
+  
+  // 自动隐藏toast
+  setTimeout(() => {
+    toastVisible.value = false;
+  }, duration);
+};
+
 const createNewSession = async () => {
+  // 检查是否已经存在一个空的/新的会话
+  // 检查当前会话是否存在，且没有消息内容，且标题是默认的或为空
+  if (sessionStore.currentSession && sessionStore.currentMessages.length === 0) {
+    // 如果当前会话是新的且没有内容，直接使用当前会话
+    showToast('已存在新会话，无需创建')
+    showSessionList.value = false
+    return
+  }
+  
   try {
     await sessionStore.createNewSession()
     showSessionList.value = false
@@ -945,10 +988,48 @@ const updatePopupPosition = () => {
   }
 }
 
+// API提供商切换处理函数
+const handleProviderChange = async () => {
+  if (!selectedProvider.value) return;
+  
+  try {
+    const response = await switchAPIProvider(selectedProvider.value);
+    if (response.success) {
+      console.log(response.message);
+      // 更新当前配置
+      apiProviderConfig.value = response.config;
+    } else {
+      console.error('切换API提供商失败:', response.error);
+      // 恢复之前的选项
+      // 注意：由于Vue的响应式系统，这里不能直接改回，需要其他处理方式
+    }
+  } catch (error) {
+    console.error('切换API提供商时出错:', error);
+    // 可能需要显示用户友好的错误信息
+  }
+};
+
+// 加载API提供商配置
+const loadAPIProviderConfig = async () => {
+  try {
+    const config = await getAPIProviderConfig();
+    apiProviderConfig.value = config;
+    selectedProvider.value = config.apiProvider;
+    
+    // 获取可用提供商列表
+    const available = await getAvailableAPIProviders();
+    availableProviders.value = available.providers;
+  } catch (error) {
+    console.error('加载API提供商配置失败:', error);
+  }
+};
+
 // 生命周期钩子
 onMounted(async () => {
   try {
-    await sessionStore.loadSessions()
+    await sessionStore.loadSessions();
+    // 加载API提供商配置
+    await loadAPIProviderConfig();
   } catch (error) {
     console.error('初始化会话失败:', error)
   }
@@ -1226,6 +1307,32 @@ onUnmounted(() => {
   color: white;
 }
 
+.api-provider-selector {
+  display: flex;
+  align-items: center;
+}
+
+.provider-select {
+  padding: 6px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  color: #374151;
+  font-size: 14px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.provider-select:hover {
+  border-color: #9ca3af;
+}
+
+.provider-select:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
 .renderer-selector {
   display: flex;
   gap: 4px;
@@ -1271,6 +1378,9 @@ onUnmounted(() => {
 }
 
 .welcome-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
   max-width: 600px;
 }
@@ -1285,43 +1395,50 @@ onUnmounted(() => {
 }
 
 .welcome-title {
-  font-size: 28px;
-  font-weight: 600;
-  color: #1f2937;
+  font-size: 32px;
+  font-weight: bold;
+  color: #222222;
   margin-bottom: 8px;
+  text-align: center;
 }
 
 .welcome-subtitle {
   font-size: 16px;
-  color: #6b7280;
+  color: #888888;
   margin-bottom: 32px;
+  text-align: center;
 }
 
 .suggested-prompts {
   margin-top: 32px;
+  width: 100%;
 }
 
 .prompt-suggestions {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 500px;
 }
 
 .prompt-button {
-  padding: 12px 16px;
-  border: 1px solid #e5e7eb;
+  padding: 16px 20px;
+  border: 1px solid #e0e0e0;
   border-radius: 12px;
   background: #ffffff;
-  color: #374151;
-  font-size: 14px;
+  color: #222222;
+  font-size: 18px;
   cursor: pointer;
   transition: all 0.2s ease;
-  text-align: left;
+  text-align: center;
+  font-weight: 500;
 }
 
 .prompt-button:hover {
-  border-color: #d1d5db;
-  background: #f9fafb;
+  border-color: #007AFF;
+  background: #F5F9FF;
+  transform: scale(0.98);
 }
 
 .message {
@@ -2082,8 +2199,25 @@ onUnmounted(() => {
     font-size: 24px;
   }
 
-  .prompt-suggestions {
-    grid-template-columns: 1fr;
   }
+
+/* Toast提示样式 */
+.toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  z-index: 10000;
+  font-size: 14px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  transition: opacity 0.3s;
+  max-width: 80%;
+  word-wrap: break-word;
+  text-align: center;
 }
 </style>

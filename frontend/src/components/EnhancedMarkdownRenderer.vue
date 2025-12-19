@@ -8,11 +8,11 @@
         :theme="mermaidTheme"
       />
       
-      <!-- PlantUML 图表 -->
-      <PlantUMLRenderer
-        v-else-if="block.type === 'plantuml'"
-        :content="block.content"
-      />
+      <!-- Mermaid 图表 -->
+<MermaidRenderer
+  v-else-if="block.type === 'plantuml'"
+  :content="block.content"
+/>
       
       <!-- Chart.js 图表 -->
       <ChartRenderer
@@ -51,7 +51,6 @@ import katex from 'katex'
 import 'katex/dist/katex.min.css'
 import MermaidRenderer from './MermaidRenderer.vue'
 import ChartRenderer from './ChartRenderer.vue'
-import PlantUMLRenderer from './PlantUMLRenderer.vue'
 import FunctionPlotRenderer from './FunctionPlotRenderer.vue'
 
 interface Props {
@@ -361,7 +360,7 @@ const processedBlocks = computed(() => {
   if (!props.content) return []
   
   const blocks: Array<{
-    type: 'mermaid' | 'plantuml' | 'chart' | 'function' | 'markdown'
+    type: 'mermaid' | 'chart' | 'function' | 'markdown'
     content?: string
     data?: any
     chartType?: string

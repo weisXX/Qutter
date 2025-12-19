@@ -8,6 +8,7 @@ const sessionService = require('./services/sessionService');
 const { upload, FileProcessor } = require('./services/fileProcessor');
 const { PromptManager } = require('./promptManager');
 const { LangchainService } = require('./services/langchainService');
+const functionPlotService = require('./services/functionPlotService');
 // 初始化提示词管理器
 const promptManager = new PromptManager();
 promptManager.loadTemplate();
@@ -165,7 +166,7 @@ app.post('/api/ask', async (req, res) => {
 
     const prompt = `你是一位资深的技术专家，请详细、准确地回答提问到的技术问题，回答要专业、实用，
                   如果回答内容涉及化学方程式、数学公式、物理公式等，请用标准的 LaTeX 数学公式格式输出，使用 $...$ 或 $$...$$ 包裹，
-                  如果问题要求绘制图表或图像，请用标准的plantUML语法。${contextPrompt}
+                  如果问题要求绘制图表或图像，请用标准的Mermaid语法。${contextPrompt}
                   当前问题：${question}
                   请用中文回答。`;
 
@@ -291,7 +292,7 @@ app.post('/api/ask-stream', async (req, res) => {
       try {
         const { SystemMessage, HumanMessage } = require('@langchain/core/messages');
         const messages = [
-          new SystemMessage("你是一位资深的技术专家，请详细、准确地回答提问到的技术问题，回答要专业、实用，如果回答内容涉及化学方程式、数学公式、物理公式等，请用标准的 LaTeX 数学公式格式输出，使用 $...$ 或 $...$ 包裹，如果问题要求绘制图表或图像，请用标准的plantUML语法。请用中文回答。"),
+          new SystemMessage("你是一位资深的技术专家，请详细、准确地回答提问到的技术问题，回答要专业、实用，如果回答内容涉及化学方程式、数学公式、物理公式等，请用标准的 LaTeX 数学公式格式输出，使用 $...$ 或 $...$ 包裹，如果问题要求绘制图表或图像，请用标准的Mermaid语法。请用中文回答。"),
           new HumanMessage(prompt)
         ];
 
@@ -593,7 +594,7 @@ app.post('/api/ask-stream-with-files', upload.array('files'), async (req, res) =
     try {
       const { SystemMessage, HumanMessage } = require('@langchain/core/messages');
       const messages = [
-        new SystemMessage("你是一位资深的技术专家，请详细、准确地回答提问到的技术问题，回答要专业、实用，如果回答内容涉及化学方程式、数学公式、物理公式等，请用标准的 LaTeX 数学公式格式输出，使用 $...$ 或 $...$ 包裹，如果问题要求绘制图表或图像，请用标准的plantUML语法。请用中文回答。"),
+        new SystemMessage("你是一位资深的技术专家，请详细、准确地回答提问到的技术问题，回答要专业、实用，如果回答内容涉及化学方程式、数学公式、物理公式等，请用标准的 LaTeX 数学公式格式输出，使用 $...$ 或 $...$ 包裹，如果问题要求绘制图表或图像，请用标准的Mermaid语法。请用中文回答。"),
         new HumanMessage(prompt)
       ];
 
@@ -818,6 +819,9 @@ app.get('/api/api-provider/available', async (req, res) => {
     res.status(500).json({ error: '获取提供商列表失败' });
   }
 });
+
+// 函数图像生成API
+app.use('/api', functionPlotService);
 
 // 停止流式请求的API端点
 app.post('/api/stop-request', (req, res) => {

@@ -151,7 +151,7 @@ class LangchainService {
 
     try {
       const messages = [
-        new SystemMessage("你是一位资深的技术专家，请详细、准确地回答提问到的技术问题，回答要专业、实用，如果回答内容涉及化学方程式、数学公式、物理公式等，请用标准的 LaTeX 数学公式格式输出，使用 $...$ 或 $...$ 包裹，如果问题要求绘制图表或图像，请用标准的plantUML语法。请用中文回答。"),
+        new SystemMessage("你是一位资深的技术专家，请详细、准确地回答提问到的技术问题，回答要专业、实用，如果回答内容涉及化学方程式、数学公式、物理公式等，请用标准的 LaTeX 数学公式格式输出，使用 $...$ 或 $...$ 包裹，如果问题要求绘制图表或图像，请用标准的Mermaid语法。请用中文回答。"),
         new HumanMessage(prompt)
       ];
 
@@ -190,7 +190,7 @@ class LangchainService {
   async answerQuestion(question, contextPrompt = '', model = this.defaultModel, options = {}) {
     const prompt = `你是一位资深的技术专家，请详细、准确地回答提问到的技术问题，回答要专业、实用，
                   如果回答内容涉及化学方程式、数学公式、物理公式等，请用标准的 LaTeX 数学公式格式输出，使用 $...$ 或 $...$ 包裹，
-                  如果问题要求绘制图表或图像，请用标准的plantUML语法。${contextPrompt}
+                  如果问题要求绘制图表或图像，请用标准的Mermaid语法。${contextPrompt}
                   当前问题：${question}
                   请用中文回答。`;
 

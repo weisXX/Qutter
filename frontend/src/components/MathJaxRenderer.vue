@@ -8,11 +8,11 @@
         :theme="mermaidTheme"
       />
       
-      <!-- PlantUML 图表 -->
-      <PlantUMLRenderer
-        v-else-if="block.type === 'plantuml'"
-        :content="block.content"
-      />
+      <!-- Mermaid 图表 -->
+<MermaidRenderer
+  v-else-if="block.type === 'plantuml'"
+  :content="block.content"
+/>
       
       <!-- Chart.js 图表 -->
       <ChartRenderer
@@ -42,7 +42,7 @@ import markdownItTaskLists from 'markdown-it-task-lists'
 import markdownItTOC from 'markdown-it-table-of-contents'
 import MermaidRenderer from './MermaidRenderer.vue'
 import ChartRenderer from './ChartRenderer.vue'
-import PlantUMLRenderer from './PlantUMLRenderer.vue'
+import MermaidRenderer from './MermaidRenderer.vue'
 
 interface Props {
   content: string
@@ -247,7 +247,7 @@ const processedBlocks = computed(() => {
   if (!props.content) return []
   
   const blocks: Array<{
-    type: 'mermaid' | 'plantuml' | 'chart' | 'markdown'
+    type: 'mermaid' | 'chart' | 'markdown'
     content?: string
     data?: any
     chartType?: string

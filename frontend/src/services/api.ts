@@ -389,4 +389,45 @@ export const getAvailableAPIProviders = async (): Promise<AvailableProvidersResp
   }
 };
 
+// 函数图像生成接口
+export interface FunctionPlotRequest {
+  expression: string;
+  options?: {
+    xMin?: number;
+    xMax?: number;
+    yMin?: number;
+    yMax?: number;
+    width?: number;
+    height?: number;
+    title?: string;
+    color?: string;
+    grid?: boolean;
+    dpi?: number;
+  };
+}
+
+export interface FunctionPlotResponse {
+  success: boolean;
+  image?: string; // base64编码的图像
+  error?: string;
+  metadata?: {
+    expression: string;
+    options: any;
+  };
+}
+
+export const generateFunctionPlot = async (request: FunctionPlotRequest): Promise<FunctionPlotResponse> => {
+  try {
+    const response = await api.post('/generate-function-plot', request);
+    return response.data;
+  } catch (error) {
+    console.error('生成函数图像失败:', error);
+    if (axios.isAxiosError(error)) {
+      const errorMessage = error.response?.data?.error || '生成函数图像失败';
+      throw new Error(errorMessage);
+    }
+    throw error;
+  }
+};
+
 export default api

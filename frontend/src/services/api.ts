@@ -70,7 +70,7 @@ export const askQuestionStream = async (
   onChunk: (chunk: string) => void,
   model?: string,
   sessionId?: string
-): Promise<void> => {
+): Promise<{ requestId: string }> => {
   try {
     const response = await fetch(`${API_BASE_URL}/ask-stream`, {
       method: 'POST',
@@ -96,6 +96,8 @@ export const askQuestionStream = async (
       throw new Error('无法读取响应流')
     }
 
+    let requestId = '';
+
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
@@ -106,19 +108,31 @@ export const askQuestionStream = async (
       for (const line of lines) {
         if (line.startsWith('data: ')) {
           const data = line.slice(6)
-          if (data === '[DONE]') return
+          if (data === '[DONE]') return { requestId }
           
           try {
             const parsed = JSON.parse(data)
+            if (parsed.error) {
+              // 处理流中的错误消息
+              throw new Error(parsed.error)
+            }
+            if (parsed.requestId) {
+              requestId = parsed.requestId
+            }
             if (parsed.content) {
               onChunk(parsed.content)
             }
           } catch (e) {
-            // 忽略解析错误
+            if (e instanceof Error && e.message !== 'Unexpected end of JSON input') {
+              // 如果是解析错误且不是JSON解析不完整，则抛出错误
+              throw e
+            }
+            // 忽略JSON解析不完整的错误
           }
         }
       }
     }
+    return { requestId }
   } catch (error) {
     console.error('流式提问失败:', error)
     if (axios.isAxiosError(error)) {
@@ -134,7 +148,7 @@ export const askQuestionStreamWithFiles = async (
   onChunk: (chunk: string) => void,
   model?: string,
   sessionId?: string
-): Promise<void> => {
+): Promise<{ requestId: string }> => {
   try {
     const formData = new FormData()
     formData.append('question', question)
@@ -165,6 +179,8 @@ export const askQuestionStreamWithFiles = async (
       throw new Error('无法读取响应流')
     }
 
+    let requestId = '';
+    
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
@@ -175,19 +191,32 @@ export const askQuestionStreamWithFiles = async (
       for (const line of lines) {
         if (line.startsWith('data: ')) {
           const data = line.slice(6)
-          if (data === '[DONE]') return
+          if (data === '[DONE]') return { requestId }
           
           try {
             const parsed = JSON.parse(data)
+            if (parsed.error) {
+              // 处理流中的错误消息
+              throw new Error(parsed.error)
+            }
+            if (parsed.requestId) {
+              requestId = parsed.requestId
+            }
             if (parsed.content) {
               onChunk(parsed.content)
             }
           } catch (e) {
-            // 忽略解析错误
+            if (e instanceof Error && e.message !== 'Unexpected end of JSON input') {
+              // 如果是解析错误且不是JSON解析不完整，则抛出错误
+              throw e
+            }
+            // 忽略JSON解析不完整的错误
           }
         }
       }
     }
+    
+    return { requestId }
   } catch (error) {
     console.error('带文件的流式提问失败:', error)
     throw error
@@ -330,7 +359,7 @@ export const getAPIProviderConfig = async (): Promise<APIProviderConfig> => {
   }
 };
 
-export const switchAPIProvider = async (provider: string): Promise<SwitchProviderResponse> => {
+export const switchAPIProvider = async (provider: string): Promise<any> => {
   try {
     const response = await api.post('/api-provider/switch', { provider });
     return response.data;
@@ -338,7 +367,17 @@ export const switchAPIProvider = async (provider: string): Promise<SwitchProvide
     console.error('切换API提供商失败:', error);
     throw error;
   }
-};
+}
+
+export const stopRequest = async (requestId: string): Promise<any> => {
+  try {
+    const response = await api.post('/stop-request', { requestId });
+    return response.data;
+  } catch (error) {
+    console.error('停止请求失败:', error);
+    throw error;
+  }
+}
 
 export const getAvailableAPIProviders = async (): Promise<AvailableProvidersResponse> => {
   try {

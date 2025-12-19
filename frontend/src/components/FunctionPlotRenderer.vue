@@ -41,11 +41,59 @@ const parseFunctionExpression = (expr: string): string => {
   console.log('原始表达式:', expr)
 
   let result = expr.trim()
+  console.log('去除空格后的表达式:', result)
 
-  // 如果表达式包含等号（如 y=sin(x)），只取等号右边的部分
+  // 检查是否是隐式方程
   const equalsIndex = result.indexOf('=')
   if (equalsIndex !== -1) {
-    result = result.substring(equalsIndex + 1).trim()
+    const leftSide = result.substring(0, equalsIndex).trim()
+    const rightSide = result.substring(equalsIndex + 1).trim()
+    
+    console.log('检测到等式方程:', { leftSide, rightSide });
+    
+    // 处理标准双曲线方程 y^2/a^2-x^2/b^2=1
+    if (leftSide.includes('y^2') && leftSide.includes('x^2')) {
+      console.log('匹配双曲线方程模式');
+      
+      // 提取a和b的值
+      let a = 1, b = 1;
+      
+      // 尝试匹配 y^2/a^2-x^2/b^2 的形式
+      const aMatch = leftSide.match(/y\^2\/(\d+(?:\.\d+)?)\^2/);
+      const bMatch = leftSide.match(/x\^2\/(\d+(?:\.\d+)?)\^2/);
+      
+      console.log('参数匹配结果:', { aMatch, bMatch });
+      
+      if (aMatch) {
+        a = parseFloat(aMatch[1]);
+        console.log('提取到a值:', a);
+      }
+      if (bMatch) {
+        b = parseFloat(bMatch[1]);
+        console.log('提取到b值:', b);
+      }
+      
+      // 计算双曲线公式: y = ±sqrt(a^2 + (a^2/b^2)*x^2)
+      const aSquared = a * a;
+      const bSquared = b * b;
+      const coefficient = aSquared / bSquared;
+      
+      result = `sqrt(${aSquared} + ${coefficient}*x*x)`;
+      console.log('使用带参数的双曲线公式，转换为:', result);
+    } else if (leftSide === 'y' || leftSide.startsWith('y ')) {
+      // 标准显式方程 y = f(x)
+      console.log('检测到标准显式方程');
+      result = rightSide;
+    } else {
+      // 其他隐式方程，暂时不支持，返回空字符串
+      console.warn('不支持的隐式方程类型:', result);
+      console.warn('左侧:', leftSide, '右侧:', rightSide);
+      console.warn('左侧包含y^2:', leftSide.includes('y^2'));
+      console.warn('左侧包含x^2:', leftSide.includes('x^2'));
+      result = '';
+    }
+    
+    console.log('等式处理完成，最终结果:', result);
   }
 
   console.log('等号处理后:', result)
@@ -60,10 +108,18 @@ const parseFunctionExpression = (expr: string): string => {
     { regex: /\bcos\(/g, replacement: 'Math.cos(' },
     { regex: /\btan\(/g, replacement: 'Math.tan(' },
     { regex: /\blog\(/g, replacement: 'Math.log10(' },
+    { regex: /\blog10\(/g, replacement: 'Math.log10(' },
     { regex: /\bln\(/g, replacement: 'Math.log(' },
     { regex: /\bsqrt\(/g, replacement: 'Math.sqrt(' },
     { regex: /\babs\(/g, replacement: 'Math.abs(' },
-    { regex: /\bexp\(/g, replacement: 'Math.exp(' }
+    { regex: /\bexp\(/g, replacement: 'Math.exp(' },
+    // 双曲函数（不替换，保留原始名称，在函数内部定义）
+    // { regex: /\bsinh\(/g, replacement: 'sinh(' },
+    // { regex: /\bcosh\(/g, replacement: 'cosh(' },
+    // { regex: /\btanh\(/g, replacement: 'tanh(' },
+    // { regex: /\bcoth\(/g, replacement: 'coth(' },
+    // { regex: /\bsech\(/g, replacement: 'sech(' },
+    // { regex: /\bcsch\(/g, replacement: 'csch(' }
   ]
 
   for (const func of functionsToReplace) {
@@ -258,6 +314,10 @@ const drawFunctionGraph = (ctx: CanvasRenderingContext2D, width: number, height:
   const parsedExpr = parseFunctionExpression(props.expression)
   console.log('解析后的表达式:', parsedExpr)
   
+  // 检查是否是双曲线方程
+  const isHyperbola = props.expression.includes('y^2') && props.expression.includes('x^2') && props.expression.includes('=');
+  console.log('是否检测为双曲线:', isHyperbola, '原始表达式:', props.expression);
+  
   // 设置线条样式
   ctx.strokeStyle = props.options.color
   ctx.lineWidth = 2
@@ -271,88 +331,118 @@ const drawFunctionGraph = (ctx: CanvasRenderingContext2D, width: number, height:
   const hasMultipleVariables = checkMultipleVariables(parsedExpr);
   
   // 计算并绘制函数
-  for (let i = 0; i <= numPoints; i++) {
-    const x = xMin + (i / numPoints) * (xMax - xMin)
+  const drawCurve = (yMultiplier: number = 1) => {
+    let localFirstPoint = true
     
-    try {
-      // 创建安全的函数来计算 y 值
-      let y: number
+    for (let i = 0; i <= numPoints; i++) {
+      const x = xMin + (i / numPoints) * (xMax - xMin)
+      
       try {
-        // 确保表达式是有效的
-        if (!parsedExpr || parsedExpr.trim() === '') {
-          console.error('表达式为空');
-          continue;
-        }
-        
-        // 为处理物理表达式，我们假设x是自变量，其他变量使用默认值
-        let fn;
+        // 创建安全的函数来计算 y 值
+        let y: number
         try {
-          // 创建一个安全的函数，带错误处理，为其他变量设置默认值
-          fn = new Function('x', `
+          // 确保表达式是有效的
+          if (!parsedExpr || parsedExpr.trim() === '') {
+            console.error('表达式为空');
+            continue;
+          }
+          
+          // 为处理物理表达式，我们假设x是自变量，其他变量使用默认值
+          let fn;
+          try {
+            // 创建一个安全的函数，带错误处理，为其他变量设置默认值
+          const functionBody = `
             "use strict";
-            // 为物理变量设置默认值
-            var t = x;  // 假设t是时间，等于x
-            var v = 1;  // 速度默认为1
-            var k = 0.5; // 衰减系数默认为0.5
-            var a = 1;  // 加速度默认为1
-            var b = 1;  // 阻尼系数默认为1
-            var m = 1;  // 质量默认为1
-            var g = 9.8; // 重力加速度
-            var C = 1;  // 任意常数
+            // 定义Math对象中不存在的函数
+            var log10 = function(x) { return Math.log(x) / Math.log(10); };
+            // 定义双曲函数（Math对象中不存在的函数）
+            var sinh = function(x) { return (Math.exp(x) - Math.exp(-x)) / 2; };
+            var cosh = function(x) { return (Math.exp(x) + Math.exp(-x)) / 2; };
+            var tanh = function(x) { return (Math.exp(x) - Math.exp(-x)) / (Math.exp(x) + Math.exp(-x)); };
+            var coth = function(x) { return (Math.exp(x) + Math.exp(-x)) / (Math.exp(x) - Math.exp(-x)); };
+            var sech = function(x) { return 2 / (Math.exp(x) + Math.exp(-x)); };
+            var csch = function(x) { return 2 / (Math.exp(x) - Math.exp(-x)); };
+              
+              // 为物理变量设置默认值
+              var t = x;  // 假设t是时间，等于x
+              var v = 1;  // 速度默认为1
+              var k = 0.5; // 衰减系数默认为0.5
+              var a = 1;  // 加速度默认为1
+              var b = 1;  // 阻尼系数默认为1
+              var m = 1;  // 质量默认为1
+              var g = 9.8; // 重力加速度
+              var C = 1;  // 任意常数
+              var mu = 0.5; // 摩擦系数默认为0.5
+              var sigma = 1; // 标准差默认为1
+              var lambda = 1; // 波长默认为1
+              var omega = 1; // 角频率默认为1
+              var phi = 0; // 相位默认为0
+              var A = 1; // 振幅默认为1
+              
+              try {
+                return ${parsedExpr};
+              } catch (e) {
+                console.error('表达式计算错误:', e, '表达式:', "${parsedExpr}");
+                return NaN;
+              }
+            `;
             
-            try {
-              return ${parsedExpr};
-            } catch (e) {
-              console.error('表达式计算错误:', e, '表达式:', \`${parsedExpr}\`);
-              return NaN;
-            }
-          `);
-          y = fn(x)
+            fn = new Function('x', functionBody);
+            y = fn(x) * yMultiplier;
+          } catch (e) {
+            console.error('函数创建失败:', e, '表达式:', parsedExpr);
+            continue;
+          }
+          
+          // 再次检查结果
+          if (typeof y !== 'number') {
+            console.error('函数返回值不是数字:', y, '表达式:', parsedExpr, 'x值:', x);
+            continue;
+          }
         } catch (e) {
-          console.error('函数创建失败:', e, '表达式:', parsedExpr);
-          continue;
+          console.error('函数创建失败:', e, '表达式:', parsedExpr)
+          continue
         }
         
-        // 再次检查结果
-        if (typeof y !== 'number') {
-          console.error('函数返回值不是数字:', y, '表达式:', parsedExpr, 'x值:', x);
-          continue;
+        // 检查结果是否为有限数
+        if (!isFinite(y) || isNaN(y)) {
+          // 如果结果不是有限数，移动到下一个点但不绘制线
+          localFirstPoint = true
+          continue
         }
-      } catch (e) {
-        console.error('函数创建失败:', e, '表达式:', parsedExpr)
-        continue
-      }
-      
-      // 检查结果是否为有限数
-      if (!isFinite(y) || isNaN(y)) {
-        // 如果结果不是有限数，移动到下一个点但不绘制线
-        firstPoint = true
-        continue
-      }
-      
-      // 将坐标转换为像素
-      const pixelX = (x - xMin) * xScale
-      const pixelY = height - (y - yMin) * yScale
-      
-      // 检查点是否在画布范围内
-      if (pixelX >= 0 && pixelX <= width && pixelY >= 0 && pixelY <= height) {
-        if (firstPoint) {
-          ctx.moveTo(pixelX, pixelY)
-          firstPoint = false
-          validPointsDrawn = true
+        
+        // 将坐标转换为像素
+        const pixelX = (x - xMin) * xScale
+        const pixelY = height - (y - yMin) * yScale
+        
+        // 检查点是否在画布范围内
+        if (pixelX >= 0 && pixelX <= width && pixelY >= 0 && pixelY <= height) {
+          if (localFirstPoint) {
+            ctx.moveTo(pixelX, pixelY)
+            localFirstPoint = false
+            validPointsDrawn = true
+          } else {
+            ctx.lineTo(pixelX, pixelY)
+            validPointsDrawn = true
+          }
         } else {
-          ctx.lineTo(pixelX, pixelY)
-          validPointsDrawn = true
+          // 如果点超出范围，移动到下一个点但不绘制线
+          localFirstPoint = true
         }
-      } else {
-        // 如果点超出范围，移动到下一个点但不绘制线
-        firstPoint = true
+      } catch (error) {
+        console.error(`计算 x=${x} 时出错:`, error)
+        localFirstPoint = true
+        continue
       }
-    } catch (error) {
-      console.error(`计算 x=${x} 时出错:`, error)
-      firstPoint = true
-      continue
     }
+  };
+  
+  // 如果是双曲线，绘制上下两部分
+  if (isHyperbola) {
+    drawCurve(1);   // 上半部分
+    drawCurve(-1);  // 下半部分
+  } else {
+    drawCurve();    // 普通函数
   }
   
   // 检查是否绘制了任何有效点
@@ -386,8 +476,14 @@ const checkMultipleVariables = (expr: string): boolean => {
   // 匹配所有变量名（字母序列）
   const variableMatches = expr.match(/[a-zA-Z]+/g) || [];
   // 过滤掉函数名和常数
-  const functions = ['sin', 'cos', 'tan', 'log', 'ln', 'sqrt', 'abs', 'exp', 'PI', 'E'];
-  const variables = variableMatches.filter(v => !functions.includes(v) && v !== 'x');
+  const functions = ['sin', 'cos', 'tan', 'log', 'ln', 'sqrt', 'abs', 'exp'];
+  const constants = ['PI', 'E'];
+  const variables = variableMatches.filter(v => 
+    !functions.includes(v) && 
+    !constants.includes(v) && 
+    v !== 'x' &&
+    v !== 'Math' // 过滤掉Math对象
+  );
   return new Set(variables).size > 1;
 }
 

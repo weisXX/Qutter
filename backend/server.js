@@ -15,7 +15,9 @@ promptManager.loadTemplate();
 // 初始化Langchain服务
 const langchainService = new LangchainService();
 
-
+// 活动请求管理 - 用于超时和手动停止
+const activeRequests = new Map();
+const REQUEST_TIMEOUT = 600000; // 10分钟超时
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -201,15 +203,31 @@ app.post('/api/ask', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('处理问答请求失败:', error.message);
-    res.status(500).json({ error: '处理请求时发生错误' });
+    console.error('处理问答请求失败:', error);
+    
+    // 检查是否是连接错误
+    if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+      res.status(503).json({ 
+        error: '无法连接到Ollama服务，请确保Ollama服务已启动并正在运行',
+        code: 'OLLAMA_CONNECTION_ERROR'
+      });
+    } else if (error.response) {
+      // Ollama服务返回了错误响应
+      res.status(error.response.status || 500).json({ 
+        error: `Ollama服务错误: ${error.response.data?.error || error.message}`,
+        code: 'OLLAMA_API_ERROR'
+      });
+    } else {
+      // 其他错误
+      res.status(500).json({ error: '处理请求时发生错误: ' + error.message });
+    }
   }
 });
 
 // 流式技术问答接口
 app.post('/api/ask-stream', async (req, res) => {
   try {
-    const { question, model = DEFAULT_MODEL, sessionId } = req.body;
+    const { question, model = DEFAULT_MODEL, sessionId, requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` } = req.body;
     
     if (!question) {
       return res.status(400).json({ error: '请提供问题' });
@@ -244,6 +262,28 @@ app.post('/api/ask-stream', async (req, res) => {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Headers': 'Cache-Control'
     });
+
+    // 创建请求对象并添加到活动请求列表
+    const requestObj = { 
+      stopped: false, 
+      response: res,
+      timeoutId: null
+    };
+    activeRequests.set(requestId, requestObj);
+
+    // 设置超时定时器
+    requestObj.timeoutId = setTimeout(() => {
+      if (!requestObj.stopped && activeRequests.has(requestId)) {
+        requestObj.stopped = true;
+        res.write('data: [TIMEOUT]\n\n');
+        res.end();
+        activeRequests.delete(requestId);
+        console.log(`请求 ${requestId} 超时结束`);
+      }
+    }, REQUEST_TIMEOUT);
+
+    // 发送请求ID给客户端，用于停止请求
+    res.write(`data: ${JSON.stringify({ requestId })}\n\n`);
     console.log('prompt:', langchainService.isUsingLangchain());
     if (langchainService.isUsingLangchain()) {
       console.log('使用LangChain流式API');
@@ -260,6 +300,12 @@ app.post('/api/ask-stream', async (req, res) => {
 
         let fullAnswer = '';
         for await (const chunk of stream) {
+          // 检查请求是否被停止
+          if (requestObj.stopped) {
+            console.log(`请求 ${requestId} 被手动停止`);
+            break;
+          }
+          
           const content = chunk.content;
           if (content) {
             fullAnswer += content;
@@ -268,22 +314,33 @@ app.post('/api/ask-stream', async (req, res) => {
           }
         }
 
-        // 保存用户问题和助手回答到数据库
-        if (sessionId) {
-          sessionService.addMessage(sessionId, 'user', question).catch(err => {
-            console.error('保存用户消息失败:', err);
-          });
-          sessionService.addMessage(sessionId, 'assistant', fullAnswer).catch(err => {
-            console.error('保存助手消息失败:', err);
-          });
-        }
+        // 只有在未被停止的情况下才保存消息和发送完成信号
+        if (!requestObj.stopped) {
+          // 保存用户问题和助手回答到数据库
+          if (sessionId) {
+            sessionService.addMessage(sessionId, 'user', question).catch(err => {
+              console.error('保存用户消息失败:', err);
+            });
+            sessionService.addMessage(sessionId, 'assistant', fullAnswer).catch(err => {
+              console.error('保存助手消息失败:', err);
+            });
+          }
 
-        res.write('data: [DONE]\n\n');
-        res.end();
+          res.write('data: [DONE]\n\n');
+          res.end();
+        }
       } catch (streamError) {
         console.error('LangChain流式请求失败:', streamError);
         res.write(`data: ${JSON.stringify({ error: 'LangChain流式请求失败' })}\n\n`);
         res.end();
+      } finally {
+        // 清理活动请求
+        if (activeRequests.has(requestId)) {
+          if (requestObj.timeoutId) {
+            clearTimeout(requestObj.timeoutId);
+          }
+          activeRequests.delete(requestId);
+        }
       }
     } else {
       // 使用Ollama流式API
@@ -297,6 +354,12 @@ app.post('/api/ask-stream', async (req, res) => {
         });
 
         response.data.on('data', (chunk) => {
+          // 检查请求是否被停止
+          if (requestObj.stopped) {
+            console.log(`请求 ${requestId} 被手动停止`);
+            return;
+          }
+          
           const lines = chunk.toString().split('\n').filter(line => line.trim());
           
           for (const line of lines) {
@@ -310,18 +373,21 @@ app.post('/api/ask-stream', async (req, res) => {
               
               // 如果响应完成，发送结束信号并保存消息
               if (data.done) {
-                // 保存用户问题和助手回答到数据库
-                if (sessionId) {
-                  sessionService.addMessage(sessionId, 'user', question).catch(err => {
-                    console.error('保存用户消息失败:', err);
-                  });
-                  sessionService.addMessage(sessionId, 'assistant', fullAnswer).catch(err => {
-                    console.error('保存助手消息失败:', err);
-                  });
+                // 只有在未被停止的情况下才保存消息和发送完成信号
+                if (!requestObj.stopped) {
+                  // 保存用户问题和助手回答到数据库
+                  if (sessionId) {
+                    sessionService.addMessage(sessionId, 'user', question).catch(err => {
+                      console.error('保存用户消息失败:', err);
+                    });
+                    sessionService.addMessage(sessionId, 'assistant', fullAnswer).catch(err => {
+                      console.error('保存助手消息失败:', err);
+                    });
+                  }
+                  
+                  res.write('data: [DONE]\n\n');
+                  res.end();
                 }
-                
-                res.write('data: [DONE]\n\n');
-                res.end();
                 return;
               }
             } catch (e) {
@@ -334,17 +400,57 @@ app.post('/api/ask-stream', async (req, res) => {
           console.error('流响应错误:', error);
           res.write(`data: ${JSON.stringify({ error: '流式响应发生错误' })}\n\n`);
           res.end();
+          
+          // 清理活动请求
+          if (activeRequests.has(requestId)) {
+            if (requestObj.timeoutId) {
+              clearTimeout(requestObj.timeoutId);
+            }
+            activeRequests.delete(requestId);
+          }
         });
 
         response.data.on('end', () => {
-          res.write('data: [DONE]\n\n');
-          res.end();
+          if (!requestObj.stopped) {
+            res.write('data: [DONE]\n\n');
+            res.end();
+          }
+          
+          // 清理活动请求
+          if (activeRequests.has(requestId)) {
+            if (requestObj.timeoutId) {
+              clearTimeout(requestObj.timeoutId);
+            }
+            activeRequests.delete(requestId);
+          }
         });
 
       } catch (streamError) {
         console.error('创建流式请求失败:', streamError);
-        res.write(`data: ${JSON.stringify({ error: '创建流式请求失败' })}\n\n`);
+        
+        // 检查是否是连接错误
+        let errorMessage = '创建流式请求失败';
+        let errorCode = 'STREAM_REQUEST_ERROR';
+        
+        if (streamError.code === 'ECONNREFUSED' || streamError.code === 'ENOTFOUND') {
+          errorMessage = '无法连接到Ollama服务，请确保Ollama服务已启动并正在运行';
+          errorCode = 'OLLAMA_CONNECTION_ERROR';
+        } else if (streamError.response) {
+          // Ollama服务返回了错误响应
+          errorMessage = `Ollama服务错误: ${streamError.response.data?.error || streamError.message}`;
+          errorCode = 'OLLAMA_API_ERROR';
+        }
+        
+        res.write(`data: ${JSON.stringify({ error: errorMessage, code: errorCode })}\n\n`);
         res.end();
+        
+        // 清理活动请求
+        if (activeRequests.has(requestId)) {
+          if (requestObj.timeoutId) {
+            clearTimeout(requestObj.timeoutId);
+          }
+          activeRequests.delete(requestId);
+        }
       }
     }
 
@@ -390,11 +496,12 @@ app.post('/api/upload', upload.array('files'), async (req, res) => {
 
 // 带文件的流式问答API
 app.post('/api/ask-stream-with-files', upload.array('files'), async (req, res) => {
-  const { question, model = DEFAULT_MODEL, sessionId } = req.body;
-  
-  if (!question) {
-    return res.status(400).json({ error: '请提供问题' });
-  }
+  try {
+    const { question, model = DEFAULT_MODEL, sessionId, requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` } = req.body;
+    
+    if (!question) {
+      return res.status(400).json({ error: '请提供问题' });
+    }
 
   let fullAnswer = '';
   let fileContents = '';
@@ -459,6 +566,28 @@ app.post('/api/ask-stream-with-files', upload.array('files'), async (req, res) =
     'Access-Control-Allow-Headers': 'Cache-Control'
   });
 
+  // 创建请求对象并添加到活动请求列表
+  const requestObj = { 
+    stopped: false, 
+    response: res,
+    timeoutId: null
+  };
+  activeRequests.set(requestId, requestObj);
+
+  // 设置超时定时器
+  requestObj.timeoutId = setTimeout(() => {
+    if (!requestObj.stopped && activeRequests.has(requestId)) {
+      requestObj.stopped = true;
+      res.write('data: [TIMEOUT]\n\n');
+      res.end();
+      activeRequests.delete(requestId);
+      console.log(`请求 ${requestId} 超时结束`);
+    }
+  }, REQUEST_TIMEOUT);
+
+  // 发送请求ID给客户端，用于停止请求
+  res.write(`data: ${JSON.stringify({ requestId })}\n\n`);
+
   if (langchainService.isUsingLangchain()) {
     // 使用LangChain流式API
     try {
@@ -468,10 +597,17 @@ app.post('/api/ask-stream-with-files', upload.array('files'), async (req, res) =
         new HumanMessage(prompt)
       ];
 
+      const chatInstance = langchainService.getChatInstance();
       const stream = await chatInstance.stream(messages);
 
       let fullAnswer = '';
       for await (const chunk of stream) {
+        // 检查请求是否被停止
+        if (requestObj.stopped) {
+          console.log(`请求 ${requestId} 被手动停止`);
+          break;
+        }
+        
         const content = chunk.content;
         if (content) {
           fullAnswer += content;
@@ -482,24 +618,35 @@ app.post('/api/ask-stream-with-files', upload.array('files'), async (req, res) =
         }
       }
 
-      // 保存用户问题和助手回答到数据库
-      if (sessionId) {
-        sessionService.addMessage(sessionId, 'user', question).catch(err => {
-          console.error('保存用户消息失败:', err);
-        });
-        sessionService.addMessage(sessionId, 'assistant', fullAnswer).catch(err => {
-          console.error('保存助手消息失败:', err);
-        });
-      }
+      // 只有在未被停止的情况下才保存消息和发送完成信号
+      if (!requestObj.stopped) {
+        // 保存用户问题和助手回答到数据库
+        if (sessionId) {
+          sessionService.addMessage(sessionId, 'user', question).catch(err => {
+            console.error('保存用户消息失败:', err);
+          });
+          sessionService.addMessage(sessionId, 'assistant', fullAnswer).catch(err => {
+            console.error('保存助手消息失败:', err);
+          });
+        }
 
-      res.write('data: [DONE]\n\n');
-      res.end();
+        res.write('data: [DONE]\n\n');
+        res.end();
+      }
     } catch (streamError) {
       console.error('LangChain流式请求失败:', streamError);
       res.write(`data: ${JSON.stringify({ error: 'LangChain流式请求失败' })}
 
 `);
       res.end();
+    } finally {
+      // 清理活动请求
+      if (activeRequests.has(requestId)) {
+        if (requestObj.timeoutId) {
+          clearTimeout(requestObj.timeoutId);
+        }
+        activeRequests.delete(requestId);
+      }
     }
   } else {
     try {
@@ -512,6 +659,12 @@ app.post('/api/ask-stream-with-files', upload.array('files'), async (req, res) =
       });
 
       response.data.on('data', (chunk) => {
+        // 检查请求是否被停止
+        if (requestObj.stopped) {
+          console.log(`请求 ${requestId} 被手动停止`);
+          return;
+        }
+        
         const lines = chunk.toString().split('\n').filter(line => line.trim());
         
         for (const line of lines) {
@@ -525,17 +678,21 @@ app.post('/api/ask-stream-with-files', upload.array('files'), async (req, res) =
             
             // 如果响应完成，发送结束信号并保存消息
             if (data.done) {
-              // 保存用户问题和助手回答到数据库
-              if (sessionId) {
-                sessionService.addMessage(sessionId, 'user', question).catch(err => {
-                  console.error('保存用户消息失败:', err);
-                });
-                sessionService.addMessage(sessionId, 'assistant', fullAnswer).catch(err => {
-                  console.error('保存助手消息失败:', err);
-                });
+              // 只有在未被停止的情况下才保存消息和发送完成信号
+              if (!requestObj.stopped) {
+                // 保存用户问题和助手回答到数据库
+                if (sessionId) {
+                  sessionService.addMessage(sessionId, 'user', question).catch(err => {
+                    console.error('保存用户消息失败:', err);
+                  });
+                  sessionService.addMessage(sessionId, 'assistant', fullAnswer).catch(err => {
+                    console.error('保存助手消息失败:', err);
+                  });
+                }
+                
+                res.write('data: [DONE]\n\n');
+                res.end();
               }
-              res.write('data: [DONE]\n\n');
-              res.end();
             }
           } catch (parseError) {
             console.error('解析响应数据失败:', parseError);
@@ -547,20 +704,66 @@ app.post('/api/ask-stream-with-files', upload.array('files'), async (req, res) =
       console.error('流式响应错误:', streamError);
       res.write(`data: ${JSON.stringify({ error: '流式响应错误' })}\n\n`);
       res.end();
+      
+      // 清理活动请求
+      if (activeRequests.has(requestId)) {
+        if (requestObj.timeoutId) {
+          clearTimeout(requestObj.timeoutId);
+        }
+        activeRequests.delete(requestId);
+      }
     });
 
     response.data.on('end', () => {
-      res.write('data: [DONE]\n\n');
-      res.end();
+      if (!requestObj.stopped) {
+        res.write('data: [DONE]\n\n');
+        res.end();
+      }
+      
+      // 清理活动请求
+      if (activeRequests.has(requestId)) {
+        if (requestObj.timeoutId) {
+          clearTimeout(requestObj.timeoutId);
+        }
+        activeRequests.delete(requestId);
+      }
     });
 
     } catch (streamError) {
       console.error('创建流式请求失败:', streamError);
-      res.write(`data: ${JSON.stringify({ error: '创建流式请求失败' })}\n\n`);
+      
+      // 检查是否是连接错误
+      let errorMessage = '创建流式请求失败';
+      let errorCode = 'STREAM_REQUEST_ERROR';
+      
+      if (streamError.code === 'ECONNREFUSED' || streamError.code === 'ENOTFOUND') {
+        errorMessage = '无法连接到Ollama服务，请确保Ollama服务已启动并正在运行';
+        errorCode = 'OLLAMA_CONNECTION_ERROR';
+      } else if (streamError.response) {
+        // Ollama服务返回了错误响应
+        errorMessage = `Ollama服务错误: ${streamError.response.data?.error || streamError.message}`;
+        errorCode = 'OLLAMA_API_ERROR';
+      }
+      
+      res.write(`data: ${JSON.stringify({ error: errorMessage, code: errorCode })}\n\n`);
       res.end();
+      
+      // 清理活动请求
+      if (activeRequests.has(requestId)) {
+        if (requestObj.timeoutId) {
+          clearTimeout(requestObj.timeoutId);
+        }
+        activeRequests.delete(requestId);
+      }
     }
   }
 
+  } catch (error) {
+    console.error('处理流式问答请求失败:', error.message);
+    if (!res.headersSent) {
+      res.status(500).json({ error: '处理请求时发生错误' });
+    }
+  }
 });
 
 // API提供商管理端点
@@ -613,6 +816,39 @@ app.get('/api/api-provider/available', async (req, res) => {
   } catch (error) {
     console.error('获取可用API提供商列表失败:', error);
     res.status(500).json({ error: '获取提供商列表失败' });
+  }
+});
+
+// 停止流式请求的API端点
+app.post('/api/stop-request', (req, res) => {
+  const { requestId } = req.body;
+  
+  if (!requestId) {
+    return res.status(400).json({ error: '请提供请求ID' });
+  }
+  
+  const request = activeRequests.get(requestId);
+  if (request) {
+    // 设置停止标志
+    request.stopped = true;
+    
+    // 如果有超时定时器，清除它
+    if (request.timeoutId) {
+      clearTimeout(request.timeoutId);
+    }
+    
+    // 结束响应
+    if (request.response && !request.response.headersSent) {
+      request.response.write('data: [STOPPED]\n\n');
+      request.response.end();
+    }
+    
+    // 从活动请求中移除
+    activeRequests.delete(requestId);
+    
+    res.json({ success: true, message: '请求已停止' });
+  } else {
+    res.status(404).json({ error: '请求不存在或已结束' });
   }
 });
 

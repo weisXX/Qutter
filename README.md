@@ -12,6 +12,19 @@
 
 ## 技术栈
 
+### ollama下载（ollama模式下需要下载ollama）
+- 下载地址: [Ollama](https://ollama.ai/)
+- 安装完成后，启动Ollama服务
+  ```bash
+  ollama serve
+  ```
+- 拉取模型（示例使用qwen2.5:7b）
+  ```bash
+  ollama run qwen2.5:7b
+  ```
+> 注意！！！
+   1. 如果使用ollama模式，需要确保Ollama服务正在运行，并且模型已成功拉取。
+   2. ollama cloud模式下，有小时、周免费额度，超过免费额度后需要等待超过免费额度时间后才能继续使用。
 ### 前端
 - Vue 3 + TypeScript
 - Vite
@@ -172,6 +185,52 @@ Content-Type: application/json
 
 - 前端: 使用浏览器开发者工具
 - 后端: 查看控制台日志输出
+
+### 迭代更新列表
+#### fix#1:
+ollama本地部署访问太慢，目前没有购买云服务部署，新增了langchain模式，支持切换使用ollama模型和langchain模型。
+1. 增加通义千问(Qwen) API支持
+2. 优化前端UI响应式设计
+3. 增加错误处理机制
+4. 完善文档说明
+>注意！！！backend需要配置.env文件，替换其中的API_KEY
+1. 通义千问(Qwen) API需要在阿里云申请密钥，替换.env中的配置
+2. 智谱AI(GLM) API需要在智谱AI平台申请密钥，替换.env中的配置
+3. deepseek API需要在deepseek平台申请密钥，替换.env中的配置
+```
+PORT=3001
+OLLAMA_API_URL=http://localhost:11434
+DEFAULT_MODEL=deepseek-v3.1:671b-cloud
+
+# LangChain API配置 - 设置为true以启用API模式，false以使用Ollama
+USE_LANGCHAIN_API=false
+
+# API提供商选择 (openai, deepseek, qwen, glm)
+API_PROVIDER=deepseek
+
+# DeepSeek API配置
+DEEPSEEK_API_MODEL=deepseek-chat
+DEEPSEEK_API_BASE_URL=https://api.deepseek.com
+DEEPSEEK_API_KEY=your_deepseek_api_key
+
+# 通义千问(Qwen) API配置
+QWEN_API_MODEL=qwen3-max
+QWEN_API_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+QWEN_API_KEY=your_qwen_api_key
+
+# 智谱AI(GLM) API配置
+GLM_API_MODEL=glm-4.6
+GLM_API_BASE_URL=https://open.bigmodel.cn/api/paas/v4/
+GLM_API_KEY=your_glm_api_key
+
+# 数据库配置
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=your_password
+DB_NAME=qutter
+```
+
 
 ## 许可证
 

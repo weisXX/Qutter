@@ -287,7 +287,7 @@ const resetZoom = () => {
 
 // 开始拖拽
 const startDrag = (e: MouseEvent) => {
-  if (scale.value <= 1) return; // 只有在放大状态下才能拖拽
+  // 移除放大状态限制，随时可以拖拽
   
   isDragging.value = true;
   dragStartX.value = e.clientX - offsetX.value;
@@ -297,7 +297,7 @@ const startDrag = (e: MouseEvent) => {
 
 // 拖拽中
 const onDrag = (e: MouseEvent) => {
-  if (!isDragging.value || scale.value <= 1) return;
+  if (!isDragging.value) return;
   
   offsetX.value = e.clientX - dragStartX.value;
   offsetY.value = e.clientY - dragStartY.value;
@@ -351,6 +351,8 @@ const toggleFullscreen = async () => {
         await (plantumlRef.value as any).msRequestFullscreen()
       }
       isFullscreen.value = true
+      // 添加全屏类
+      plantumlRef.value.classList.add('fullscreen-mode')
     } else {
       // 退出全屏
       if (document.exitFullscreen) {
@@ -361,6 +363,8 @@ const toggleFullscreen = async () => {
         await (document as any).msExitFullscreen()
       }
       isFullscreen.value = false
+      // 移除全屏类
+      plantumlRef.value.classList.remove('fullscreen-mode')
     }
   } catch (err) {
     console.error('全屏操作失败:', err)
@@ -466,6 +470,39 @@ onUnmounted(() => {
   min-height: 200px;
   overflow: hidden; /* 隐藏溢出内容 */
   position: relative; /* 为定位做准备 */
+}
+
+/* 全屏模式下的样式 - 使用类选择器 */
+.plantuml-content.fullscreen-mode .diagram-container {
+  width: 100vw;
+  height: 100vh;
+  min-height: 100vh;
+}
+
+/* 全屏模式下的样式 - 使用伪类选择器 */
+.plantuml-content:fullscreen .diagram-container {
+  width: 100vw;
+  height: 100vh;
+  min-height: 100vh;
+}
+
+/* 兼容不同浏览器的全屏前缀 */
+.plantuml-content:-webkit-full-screen .diagram-container {
+  width: 100vw;
+  height: 100vh;
+  min-height: 100vh;
+}
+
+.plantuml-content:-moz-full-screen .diagram-container {
+  width: 100vw;
+  height: 100vh;
+  min-height: 100vh;
+}
+
+.plantuml-content:-ms-fullscreen .diagram-container {
+  width: 100vw;
+  height: 100vh;
+  min-height: 100vh;
 }
 
 .diagram-container img {

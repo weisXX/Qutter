@@ -113,18 +113,12 @@
           </div>
                               <div v-if="apiProviderConfig && apiProviderConfig.useLangchain" class="api-provider-selector">
             <select v-model="selectedProvider" @change="handleProviderChange" class="provider-select" title="选择API提供商">
-              <option value="">API模式</option>
-              <option value="openai">OpenAI</option>
               <option value="deepseek">DeepSeek</option>
               <option value="qwen">通义千问</option>
               <option value="glm">智谱AI</option>
             </select>
           </div>
-          <button class="header-button" title="数学公式对比" @click="goToMathComparison">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M9 11H3v2h6v-2zm0-4H3v2h6V7zm0 8H3v2h6v-2zm12-8h-6v2h6V7zm0 4h-6v2h6v-2zm0 4h-6v2h6v-2z"></path>
-            </svg>
-          </button>
+          
           <button class="header-button" title="设置">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="3"></circle>
@@ -298,18 +292,19 @@
                 </svg>
               </button>
               <button
-                @click="sendMessage"
-                :disabled="isLoading || (!currentMessage.trim() && attachedFiles.length === 0)"
+                @click="isLoading ? stopStreaming() : sendMessage()"
+                :disabled="!isLoading && (!currentMessage.trim() && attachedFiles.length === 0)"
                 class="send-button"
-                title="发送消息 (Enter)"
+                :title="isLoading ? '停止生成' : '发送消息 (Enter)'"
+                :class="{ 'stop-button': isLoading }"
               >
                 <svg v-if="!isLoading" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <line x1="22" y1="2" x2="11" y2="13"></line>
                   <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
                 </svg>
-                <div v-else class="loading-spinner">
-                  <div class="spinner"></div>
-                </div>
+                <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="6" y="6" width="12" height="12"></rect>
+                </svg>
               </button>
             </div>
           </div>
@@ -373,7 +368,7 @@
 <script setup lang="ts">
 import { ref, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { askQuestionStream, askQuestionStreamWithFiles, getAPIProviderConfig, switchAPIProvider, getAvailableAPIProviders } from '@/services/api'
+import { askQuestionStream, askQuestionStreamWithFiles, getAPIProviderConfig, switchAPIProvider, getAvailableAPIProviders, stopRequest } from '@/services/api'
 import FileProcessor from '@/services/fileProcessor'
 import { ErrorHandler } from '@/utils/errorHandler'
 import { useSessionStore } from '@/stores/session'
@@ -393,6 +388,7 @@ const router = useRouter()
 const messages = ref<Message[]>([])
 const currentMessage = ref('')
 const isLoading = ref(false)
+const currentRequestId = ref<string | null>(null)
 const messagesContainer = ref<HTMLElement>()
 const messageInput = ref<HTMLTextAreaElement>()
 const sessionStore = useSessionStore()
@@ -427,7 +423,7 @@ const showSessionList = ref(false)
 const rendererType = ref<'marked' | 'markdown-it' | 'comparison' | 'enhanced'>('enhanced')
 
 // API提供商选择状态
-const selectedProvider = ref<string>('')
+const selectedProvider = ref<string>('deepseek')
 const availableProviders = ref<string[]>([])
 const apiProviderConfig = ref<any>(null)
 
@@ -580,7 +576,7 @@ const sendMessage = async () => {
     
     if (filesToProcess.length > 0) {
       // 有附件时使用带文件的API
-      await askQuestionStreamWithFiles(question, filesToProcess, (chunk: string) => {
+      const { requestId } = await askQuestionStreamWithFiles(question, filesToProcess, (chunk: string) => {
         // 如果是第一个数据块，先停止loading，创建助手消息
         if (isFirstChunk) {
           isLoading.value = false
@@ -600,9 +596,12 @@ const sendMessage = async () => {
         }
         scrollToBottom()
       }, undefined, sessionStore.currentSessionId || undefined)
+      
+      // 存储请求ID
+      currentRequestId.value = requestId
     } else {
       // 没有附件时使用普通API
-      await askQuestionStream(question, (chunk: string) => {
+      const { requestId } = await askQuestionStream(question, (chunk: string) => {
         // 如果是第一个数据块，先停止loading，创建助手消息
         if (isFirstChunk) {
           isLoading.value = false
@@ -622,6 +621,9 @@ const sendMessage = async () => {
         }
         scrollToBottom()
       }, undefined, sessionStore.currentSessionId || undefined)
+      
+      // 存储请求ID
+      currentRequestId.value = requestId
     }
     
     // 流式输出完成后，确保自动滚动
@@ -642,6 +644,24 @@ const sendMessage = async () => {
     }
     messages.value.push(errorMessage)
     scrollToBottom()
+  } finally {
+    // 清除当前请求ID
+    currentRequestId.value = null
+  }
+}
+
+// 停止流式输出
+const stopStreaming = async () => {
+  if (currentRequestId.value) {
+    try {
+      await stopRequest(currentRequestId.value)
+      console.log('已停止请求:', currentRequestId.value)
+    } catch (error) {
+      console.error('停止请求失败:', error)
+    } finally {
+      isLoading.value = false
+      currentRequestId.value = null
+    }
   }
 }
 
@@ -693,10 +713,6 @@ const deleteSession = async (sessionId: string, event: Event) => {
       console.error('删除会话失败:', error)
     }
   }
-}
-
-const goToMathComparison = () => {
-  router.push('/math-comparison')
 }
 
 const usePrompt = (prompt: string) => {
@@ -1855,6 +1871,14 @@ onUnmounted(() => {
 .send-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.send-button.stop-button {
+  background: #ef4444;
+}
+
+.send-button.stop-button:hover:not(:disabled) {
+  background: #dc2626;
 }
 
 .loading-spinner {

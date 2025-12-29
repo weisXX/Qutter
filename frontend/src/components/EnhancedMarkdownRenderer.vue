@@ -23,7 +23,7 @@
       />
       
       <!-- 函数绘制 -->
-      <FunctionPlotRenderer
+      <FunctionPlotComponent
         v-else-if="block.type === 'function'"
         :expression="block.expression"
         :options="block.options"
@@ -52,6 +52,7 @@ import 'katex/dist/katex.min.css'
 import MermaidRenderer from './MermaidRenderer.vue'
 import ChartRenderer from './ChartRenderer.vue'
 import FunctionPlotRenderer from './FunctionPlotRenderer.vue'
+import FunctionPlotComponent from './FunctionPlotComponent.vue'
 
 interface Props {
   content: string

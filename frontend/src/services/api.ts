@@ -418,12 +418,147 @@ export interface FunctionPlotResponse {
 
 export const generateFunctionPlot = async (request: FunctionPlotRequest): Promise<FunctionPlotResponse> => {
   try {
-    const response = await api.post('/generate-function-plot', request);
+    // 检查是否为表达式数组
+    let isExpressionArray = false;
+    try {
+      const parsed = JSON.parse(request.expression);
+      isExpressionArray = Array.isArray(parsed) || (parsed.expressions && Array.isArray(parsed.expressions));
+    } catch (e) {
+      // 不是JSON格式，继续检查
+    }
+    
+    // 检查是否为隐式函数（包含等号且不是简单的 y= 或 f(x)= 格式）
+    const isImplicitFunction = (expression: string) => {
+      if (!expression || !expression.includes('=')) return false;
+      
+      const equalsIndex = expression.indexOf('=');
+      const leftSide = expression.substring(0, equalsIndex).trim();
+      const rightSide = expression.substring(equalsIndex + 1).trim();
+      
+      // 如果不是简单的 y= 或 f(x)= 格式，且左侧包含 y 或右侧同时包含 x 和 y，则认为是隐式函数
+      return leftSide !== 'y' && 
+             leftSide !== 'f(x)' && 
+             !leftSide.match(/^f\([^)]*\)$/) &&
+             (leftSide.includes('y') || (rightSide.includes('x') && rightSide.includes('y')));
+    };
+    
+    // 根据表达式类型选择API端点
+    // 如果是数组或隐式函数，使用增强版API
+    const endpoint = isExpressionArray || isImplicitFunction(request.expression) 
+      ? '/function-plot/generate-enhanced-function-plot' 
+      : '/function-plot/generate-function-plot';
+    
+    console.log(`使用${endpoint.includes('enhanced') ? '增强版' : '普通'}API绘制函数`);
+    console.log('表达式:', request.expression);
+    console.log('是否为表达式数组:', isExpressionArray);
+    console.log('是否为隐式函数:', isImplicitFunction(request.expression));
+    
+    const response = await api.post(endpoint, request);
     return response.data;
   } catch (error) {
     console.error('生成函数图像失败:', error);
     if (axios.isAxiosError(error)) {
       const errorMessage = error.response?.data?.error || '生成函数图像失败';
+      throw new Error(errorMessage);
+    }
+    throw error;
+  }
+};
+
+// 智能函数绘制接口
+export interface SmartFunctionPlotRequest {
+  userInput: string;
+  options?: {
+    xMin?: number;
+    xMax?: number;
+    yMin?: number;
+    yMax?: number;
+    width?: number;
+    height?: number;
+    title?: string;
+    color?: string;
+    grid?: boolean;
+    dpi?: number;
+  };
+}
+
+export interface SmartFunctionPlotResponse {
+  success: boolean;
+  data?: {
+    original_input: string;
+    parsed_expression: string;
+    expression_type: string;
+    sympy_code: string;
+    latex: string;
+    plot_params: any;
+    function_info: any;
+    image?: string;
+    plot_method?: string;
+    execution_info?: any;
+  };
+  message?: string;
+  suggestions?: string[];
+  metadata?: any;
+  error?: string;
+  suggestion?: string;
+}
+
+export const generateSmartFunctionPlot = async (request: SmartFunctionPlotRequest): Promise<SmartFunctionPlotResponse> => {
+  try {
+    console.log('使用智能函数绘制API');
+    console.log('用户输入:', request.userInput);
+    
+    const response = await api.post('/smart-function-plot/smart-function-plot', request);
+    return response.data;
+  } catch (error) {
+    console.error('智能函数绘制失败:', error);
+    if (axios.isAxiosError(error)) {
+      const errorMessage = error.response?.data?.error || '智能函数绘制失败';
+      throw new Error(errorMessage);
+    }
+    throw error;
+  }
+};
+
+// 前端函数绘图接口
+export interface FrontendFunctionPlotRequest {
+  input: string;
+  useLLM?: boolean;
+}
+
+export interface FrontendFunctionPlotResponse {
+  success: boolean;
+  data?: {
+    original_input: string;
+    function_type: string;
+    functions: Array<{
+      fn: string;
+      color: string;
+      graphType: string;
+    }>;
+    title: string;
+    xDomain: number[];
+    yDomain: number[];
+    latex: string;
+    plot_config: any;
+    plot_method: string;
+  };
+  message?: string;
+  error?: string;
+  suggestion?: string;
+}
+
+export const generateFrontendFunctionPlot = async (request: FrontendFunctionPlotRequest): Promise<FrontendFunctionPlotResponse> => {
+  try {
+    console.log('使用前端函数绘图API');
+    console.log('用户输入:', request.input);
+    
+    const response = await api.post('/frontend-function-plot', request);
+    return response.data;
+  } catch (error) {
+    console.error('前端函数绘图失败:', error);
+    if (axios.isAxiosError(error)) {
+      const errorMessage = error.response?.data?.error || '前端函数绘图失败';
       throw new Error(errorMessage);
     }
     throw error;

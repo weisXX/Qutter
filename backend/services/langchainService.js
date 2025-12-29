@@ -158,13 +158,59 @@ class LangchainService {
       const result = await this.chat.invoke(messages, {
         signal: options.signal || null
       });
-
+      console.log('LangChain API原始响应:', result.content);
       return result.content;
     } catch (error) {
       console.error(`${this.apiProvider} API调用失败:`, error);
       throw error;
     }
   }
+
+  
+  // 通过LangChain调用API
+  async callLangchainAPIOfFunc(prompt, options = {}) {
+    if (!this.isUsingLangchain()) {
+      throw new Error(`LangChain API未启用或${this.apiProvider} API密钥未设置`);
+    }
+
+    try {
+      const messages = [
+        // new SystemMessage("你是一位资深的技术专家，请详细、准确地回答提问到的技术问题，回答要专业、实用，如果回答内容涉及化学方程式、数学公式、物理公式等，请用标准的 LaTeX 数学公式格式输出，使用 $...$ 或 $...$ 包裹，如果问题要求绘制图表或图像，请用标准的Mermaid语法。请用中文回答。"),
+        new HumanMessage(prompt)
+      ];
+
+      const result = await this.chat.invoke(messages, {
+        signal: options.signal || null
+      });
+      console.log('LangChain API原始响应:', result.content);
+      return result.content;
+    } catch (error) {
+      console.error(`${this.apiProvider} API调用失败:`, error);
+      throw error;
+    }
+  }
+
+  
+  // 通过Ollama调用API
+  async callOllamaAPIOfFunc(prompt, model = this.defaultModel, options = {}) {
+    const axios = require('axios');
+    try {
+      const response = await axios.post(`${this.ollamaApiUrl}/api/generate`, {
+        model: model,
+        prompt: prompt,
+        stream: options.stream || false,
+        options: options.options || {}
+      }, {
+        timeout: options.timeout || 60000
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error('Ollama API调用失败:', error.message);
+      throw error;
+    }
+  }
+
 
   // 通过Ollama调用API
   async callOllamaAPI(prompt, model = this.defaultModel, options = {}) {
@@ -183,6 +229,21 @@ class LangchainService {
     } catch (error) {
       console.error('Ollama API调用失败:', error.message);
       throw error;
+    }
+  }
+
+  
+  // 统一的问答方法，根据配置选择API
+  async answerQuestionOfFunc(question, contextPrompt = '', model = this.defaultModel, options = {}) {
+    const prompt = `${contextPrompt}
+                  当前问题：${question}
+                  请用中文回答。`;
+
+    if (this.isUsingLangchain()) {
+      return await this.callLangchainAPIOfFunc(prompt, options);
+    } else {
+      const response = await this.callOllamaAPI(prompt, model, options);
+      return response.response || '';
     }
   }
 

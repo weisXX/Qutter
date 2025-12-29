@@ -57,16 +57,42 @@ const error = ref('')
 const plotImage = ref('')
 
 // 预处理表达式，确保格式正确
-const preprocessExpression = (expr: string): string => {
+const preprocessExpression = (expr: string): string | string[] => {
   if (!expr) return ''
+  
+  // 尝试解析JSON格式的表达式
+  try {
+    const parsed = JSON.parse(expr)
+    if (Array.isArray(parsed)) {
+      console.log('检测到表达式数组:', parsed)
+      return parsed
+    } else if (parsed.expressions && Array.isArray(parsed.expressions)) {
+      console.log('检测到对象中的表达式数组:', parsed.expressions)
+      return parsed.expressions
+    }
+  } catch (e) {
+    // 不是JSON格式，继续处理
+  }
   
   let result = expr.trim()
   
-  // 处理隐式方程（双曲线、椭圆等）
+  // 处理等号，提取右侧表达式
   const equalsIndex = result.indexOf('=')
   if (equalsIndex !== -1) {
-    console.log('检测到隐式方程:', result)
-    // 保持原始表达式，让后端处理
+    const leftSide = result.substring(0, equalsIndex).trim()
+    const rightSide = result.substring(equalsIndex + 1).trim()
+    
+    console.log('检测到方程格式:', result)
+    console.log('左侧:', leftSide, '右侧:', rightSide)
+    
+    // 如果是简单的 y= 或 f(x)= 格式，只使用右侧表达式
+    if (leftSide === 'y' || leftSide === 'f(x)' || leftSide.match(/^f\([^)]*\)$/)) {
+      console.log('提取右侧表达式:', rightSide)
+      return rightSide
+    }
+    
+    // 其他隐式方程现在也支持，直接返回完整表达式
+    console.log('支持隐式方程:', result)
     return result
   }
   
@@ -95,13 +121,27 @@ const generatePlot = async () => {
     // 预处理表达式
     const processedExpression = preprocessExpression(props.expression)
     
+    console.log('原始表达式:', props.expression)
+    console.log('预处理后表达式:', processedExpression)
+    
+    // 确保表达式不为空
+    const finalExpression = processedExpression || props.expression
+    console.log('最终发送的表达式:', finalExpression)
+    
+    // 如果是数组，需要转换为JSON字符串发送
+    let expressionToSend = finalExpression
+    if (Array.isArray(finalExpression)) {
+      expressionToSend = JSON.stringify(finalExpression)
+    }
+    
     const response = await generateFunctionPlot({
-      expression: processedExpression,
+      expression: expressionToSend,
       options: props.options
     })
 
     if (response.success && response.image) {
       plotImage.value = response.image
+      console.log('函数图像生成成功:', response.metadata)
     } else {
       error.value = response.error || '生成函数图像失败'
       console.error('函数图像生成失败:', response)
@@ -116,6 +156,7 @@ const generatePlot = async () => {
 
 // 重试生成图像
 const retryPlot = () => {
+  // debugger
   generatePlot()
 }
 

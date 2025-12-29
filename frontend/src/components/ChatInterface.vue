@@ -68,6 +68,13 @@
           </div>
         </div>
         <div class="header-right">
+          <!-- <button class="header-button" title="智能函数绘制" @click="showFunctionPlot = !showFunctionPlot" :class="{ active: showFunctionPlot }">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 3v18h18"></path>
+              <path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"></path>
+            </svg>
+          </button> -->
+          
           <button class="header-button" title="新建对话" @click="createNewSession">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -265,48 +272,127 @@
         
       </div>
 
+      <!-- 智能函数绘制面板 -->
+      <!-- <div v-if="showFunctionPlot" class="function-plot-panel">
+        <div class="panel-header">
+          <h3>智能函数绘制</h3>
+          <div class="plot-mode-toggle">
+            <button 
+              class="mode-btn" 
+              :class="{ active: plotMode === 'python' }"
+              @click="plotMode = 'python'"
+            >
+              Python绘图
+            </button>
+            <button 
+              class="mode-btn" 
+              :class="{ active: plotMode === 'frontend' }"
+              @click="plotMode = 'frontend'"
+            >
+              前端绘图
+            </button>
+          </div>
+          <button class="close-panel" @click="showFunctionPlot = false">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <SmartFunctionPlotRenderer v-if="plotMode === 'python'" />
+        <FrontendFunctionPlotRenderer v-else />
+      </div> -->
+
       <div class="chat-input-container">
         <div class="input-wrapper">
           <div class="input-container">
-            <textarea
-              v-model="currentMessage"
-              @keydown="handleEnterKey"
-              placeholder="输入消息..."
-              rows="1"
-              :disabled="isLoading"
-              class="message-input"
-              ref="messageInput"
-            ></textarea>
-            <div class="input-actions">
-              <input
-                ref="fileInputRef"
-                type="file"
-                multiple
-                @change="handleFileSelect"
-                style="display: none"
-                accept=".txt,.md,.json,.csv,.pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.svg"
-              />
-              <button class="action-button" title="附件" @click="fileInputRef?.click()">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
-                </svg>
-              </button>
-              <button
-                @click="isLoading ? stopStreaming() : sendMessage()"
-                :disabled="!isLoading && (!currentMessage.trim() && attachedFiles.length === 0)"
-                class="send-button"
-                :title="isLoading ? '停止生成' : '发送消息 (Enter)'"
-                :class="{ 'stop-button': isLoading }"
-              >
-                <svg v-if="!isLoading" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="22" y1="2" x2="11" y2="13"></line>
-                  <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                </svg>
-                <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="6" y="6" width="12" height="12"></rect>
-                </svg>
-              </button>
+            <!-- 输入框单独一行 -->
+          <div class="input-area">
+            <!-- 文本输入模式 -->
+            <div v-if="inputMode === 'text'" class="text-input-wrapper">
+              <textarea
+                ref="messageInput"
+                v-model="currentMessage"
+                @keydown="handleEnterKey"
+                @input="adjustTextareaHeight"
+                :placeholder="isLoading ? '处理中...' : '输入消息...'"
+                class="message-input"
+                rows="1"
+                :disabled="isLoading"
+              ></textarea>
             </div>
+            
+            <!-- 语音输入模式 -->
+            <div v-else class="voice-input-wrapper">
+              <button
+                @click="toggleVoiceRecording"
+                :class="['voice-record-btn', { recording: isVoiceRecording }]"
+                :disabled="isLoading"
+              >
+                <svg v-if="!isVoiceRecording" class="icon" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                  <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                </svg>
+                <svg v-else class="icon recording-icon" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="6" y="6" width="12" height="12"/>
+                </svg>
+                {{ isVoiceRecording ? '停止录音' : '开始录音' }}
+              </button>
+              
+              <div v-if="voiceContent" class="voice-content-display">
+                <div class="voice-content-header">
+                  <span>语音内容：</span>
+                  <button @click="clearVoiceContent" class="clear-voice-btn" title="清空">清空</button>
+                </div>
+                <div class="voice-content-text">{{ voiceContent }}</div>
+              </div>
+              
+              <div v-if="isVoiceRecording" class="recording-indicator">
+                <div class="wave-animation"></div>
+                <span>正在录音...</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 下拉框、附件和发送按钮在下面一行 -->
+          <div class="input-controls">
+            <!-- 输入模式选择 -->
+            <select v-model="inputMode" class="input-mode-select" title="选择输入模式">
+              <option value="text">文本</option>
+              <option value="voice">语音</option>
+            </select>
+            
+            <div style="flex: 1;"></div>
+            
+            <input
+              ref="fileInputRef"
+              type="file"
+              multiple
+              @change="handleFileSelect"
+              style="display: none"
+              accept=".txt,.md,.json,.csv,.pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.svg"
+            />
+            <button class="action-button" title="附件" @click="fileInputRef?.click()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+              </svg>
+            </button>
+            <button
+              @click="isLoading ? stopStreaming() : sendMessage()"
+              :disabled="!isLoading && (!hasContentToSend && attachedFiles.length === 0)"
+              class="send-button"
+              :title="isLoading ? '停止生成' : '发送消息 (Enter)'"
+              :class="{ 'stop-button': isLoading }"
+            >
+              <svg v-if="!isLoading" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+              </svg>
+              <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="6" y="6" width="12" height="12"></rect>
+              </svg>
+            </button>
+          </div>
           </div>
           <!-- 附件预览区域 -->
         <div v-if="attachedFiles.length > 0" class="attached-files">
@@ -351,13 +437,12 @@
         
         <div class="input-info">
           <span class="input-hint">Enter 发送，Shift + Enter 换行</span>
-          
         </div>
+          </div>
         </div>
       </div>
-      </div>
-      </div>
-      </div>
+    </div>
+  </div>
   
   <!-- Toast 提示 -->
   <div v-if="toastVisible" class="toast" @click="toastVisible = false">
@@ -366,7 +451,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { askQuestionStream, askQuestionStreamWithFiles, getAPIProviderConfig, switchAPIProvider, getAvailableAPIProviders, stopRequest } from '@/services/api'
 import FileProcessor from '@/services/fileProcessor'
@@ -376,7 +461,9 @@ import MarkdownRenderer from './MarkdownRenderer.vue'
 import MarkdownItRenderer from './MarkdownItRenderer.vue'
 import MarkdownComparison from './MarkdownComparison.vue'
 import EnhancedMarkdownRenderer from './EnhancedMarkdownRenderer.vue'
-import MathJaxRenderer from './MathJaxRenderer.vue'
+// import MathJaxRenderer from './MathJaxRenderer.vue'
+// import SmartFunctionPlotRenderer from './SmartFunctionPlotRenderer.vue'
+import FrontendFunctionPlotRenderer from './FrontendFunctionPlotRenderer.vue'
 
 interface Message {
   type: 'user' | 'assistant'
@@ -392,6 +479,12 @@ const currentRequestId = ref<string | null>(null)
 const messagesContainer = ref<HTMLElement>()
 const messageInput = ref<HTMLTextAreaElement>()
 const sessionStore = useSessionStore()
+
+// 语音输入相关状态
+const inputMode = ref<'text' | 'voice'>('text')
+const voiceContent = ref('')
+const isVoiceRecording = ref(false)
+let recognition: SpeechRecognition | null = null
 
 // 附件相关状态
 const attachedFiles = ref<File[]>([])
@@ -409,6 +502,15 @@ const navPosition = ref(50) // 百分比位置
 const shouldAutoScroll = ref(true)
 const isUserScrolling = ref(false)
 
+// 计算属性：检查是否有内容可发送
+const hasContentToSend = computed(() => {
+  if (inputMode.value === 'text') {
+    return currentMessage.value.trim().length > 0
+  } else {
+    return voiceContent.value.trim().length > 0
+  }
+})
+
 // 监听输入内容变化，自动调整高度
 watch(currentMessage, () => {
   nextTick(() => {
@@ -418,6 +520,8 @@ watch(currentMessage, () => {
 
 // 会话列表显示状态
 const showSessionList = ref(false)
+const showFunctionPlot = ref(false)
+const plotMode = ref('frontend') // 'python' 或 'frontend'
 
 // 渲染器类型选择
 const rendererType = ref<'marked' | 'markdown-it' | 'comparison' | 'enhanced'>('enhanced')
@@ -524,11 +628,105 @@ const handleEnterKey = (event: KeyboardEvent) => {
   sendMessage()
 }
 
+// 初始化语音识别
+const initSpeechRecognition = () => {
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    console.error('浏览器不支持语音识别功能')
+    return
+  }
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+  recognition = new SpeechRecognition()
+  
+  recognition.continuous = true
+  recognition.interimResults = true
+  recognition.lang = 'zh-CN'
+
+  recognition.onresult = (event: SpeechRecognitionEvent) => {
+    let finalTranscript = ''
+
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript
+      if (event.results[i].isFinal) {
+        finalTranscript += transcript
+      }
+    }
+
+    if (finalTranscript) {
+      // 追加新内容而不是覆盖
+      voiceContent.value += finalTranscript
+    }
+  }
+
+  recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+    console.error('语音识别错误:', event.error)
+    stopVoiceRecording()
+  }
+
+  recognition.onend = () => {
+    if (isVoiceRecording.value) {
+      // 如果仍在录音状态，重新启动
+      recognition?.start()
+    }
+  }
+}
+
+// 切换语音录音状态
+const toggleVoiceRecording = async () => {
+  if (isVoiceRecording.value) {
+    stopVoiceRecording()
+  } else {
+    await startVoiceRecording()
+  }
+}
+
+// 开始语音录音
+const startVoiceRecording = async () => {
+  if (!recognition) {
+    initSpeechRecognition()
+  }
+  
+  if (!recognition) {
+    console.error('语音识别初始化失败')
+    return
+  }
+  
+  try {
+    isVoiceRecording.value = true
+    // 不清空现有内容，保持连续性
+    recognition?.start()
+  } catch (err) {
+    console.error('启动语音录音失败:', err)
+    isVoiceRecording.value = false
+  }
+}
+
+// 停止语音录音
+const stopVoiceRecording = () => {
+  isVoiceRecording.value = false
+  recognition?.stop()
+}
+
+// 清空语音内容
+const clearVoiceContent = () => {
+  voiceContent.value = ''
+}
+
+// 修改发送消息逻辑以支持语音
 const sendMessage = async () => {
-  if ((!currentMessage.value.trim() && attachedFiles.value.length === 0) || isLoading.value) return
+  // 获取要发送的内容
+  let messageToSend = ''
+  
+  if (inputMode.value === 'text') {
+    messageToSend = currentMessage.value.trim()
+  } else {
+    messageToSend = voiceContent.value.trim()
+  }
+  
+  if ((!messageToSend && attachedFiles.value.length === 0) || isLoading.value) return
 
   // 构建用户消息文本，包含附件信息
-  let messageText = currentMessage.value.trim()
+  let messageText = messageToSend
   const filesToProcess = [...attachedFiles.value]
   
   if (filesToProcess.length > 0) {
@@ -556,8 +754,14 @@ const sendMessage = async () => {
   }
 
   messages.value.push(userMessage)
-  const question = currentMessage.value.trim()
-  currentMessage.value = ''
+  
+  // 清空对应的输入内容
+  if (inputMode.value === 'text') {
+    currentMessage.value = ''
+  } else {
+    voiceContent.value = ''
+  }
+  
   attachedFiles.value = []
   isLoading.value = true
   
@@ -576,7 +780,7 @@ const sendMessage = async () => {
     
     if (filesToProcess.length > 0) {
       // 有附件时使用带文件的API
-      const { requestId } = await askQuestionStreamWithFiles(question, filesToProcess, (chunk: string) => {
+      const { requestId } = await askQuestionStreamWithFiles(messageToSend, filesToProcess, (chunk: string) => {
         // 如果是第一个数据块，先停止loading，创建助手消息
         if (isFirstChunk) {
           isLoading.value = false
@@ -601,7 +805,7 @@ const sendMessage = async () => {
       currentRequestId.value = requestId
     } else {
       // 没有附件时使用普通API
-      const { requestId } = await askQuestionStream(question, (chunk: string) => {
+      const { requestId } = await askQuestionStream(messageToSend, (chunk: string) => {
         // 如果是第一个数据块，先停止loading，创建助手消息
         if (isFirstChunk) {
           isLoading.value = false
@@ -649,6 +853,8 @@ const sendMessage = async () => {
     currentRequestId.value = null
   }
 }
+
+
 
 // 停止流式输出
 const stopStreaming = async () => {
@@ -1046,6 +1252,8 @@ onMounted(async () => {
     await sessionStore.loadSessions();
     // 加载API提供商配置
     await loadAPIProviderConfig();
+    // 初始化语音识别
+    initSpeechRecognition();
   } catch (error) {
     console.error('初始化会话失败:', error)
   }
@@ -1058,6 +1266,14 @@ watch(() => navPosition.value, () => {
 })
 
 onUnmounted(() => {
+  // 清理语音识别资源
+  if (isVoiceRecording.value) {
+    stopVoiceRecording();
+  }
+  if (recognition) {
+    recognition.stop();
+    recognition = null;
+  }
 })
 </script>
 
@@ -1769,6 +1985,76 @@ onUnmounted(() => {
   }
 }
 
+.function-plot-panel {
+  border-top: 1px solid #e5e7eb;
+  background: #f8f9fa;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  background: #ffffff;
+  gap: 1rem;
+}
+
+.panel-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.plot-mode-toggle {
+  display: flex;
+  background: #f1f3f4;
+  border-radius: 6px;
+  padding: 0.25rem;
+}
+
+.mode-btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #666;
+  transition: all 0.2s;
+}
+
+.mode-btn.active {
+  background: #3498db;
+  color: white;
+}
+
+.mode-btn:hover:not(.active) {
+  background: #e1e5e9;
+}
+
+.close-panel {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  transition: all 0.2s;
+}
+
+.close-panel:hover {
+  background: #f1f3f4;
+  color: #333;
+}
+
 .chat-input-container {
   border-top: 1px solid #e5e7eb;
   background: #ffffff;
@@ -1786,7 +2072,7 @@ onUnmounted(() => {
 
 .input-container {
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
   gap: 12px;
   background: #f9fafb;
   border: 1px solid #e5e7eb;
@@ -1825,10 +2111,31 @@ onUnmounted(() => {
   cursor: not-allowed;
 }
 
-.input-actions {
+.input-controls {
   display: flex;
   gap: 8px;
   align-items: center;
+  margin-top: 8px;
+}
+
+.input-mode-select {
+  padding: 6px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #ffffff;
+  font-size: 12px;
+  color: #374151;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.input-mode-select:hover {
+  border-color: #d1d5db;
+}
+
+.input-mode-select:focus {
+  border-color: #3b82f6;
 }
 
 .action-button {
@@ -1901,6 +2208,131 @@ onUnmounted(() => {
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+/* 语音输入相关样式 */
+.voice-input-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.voice-record-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border: 2px solid #ef4444;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #ef4444;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: 500;
+  font-size: 14px;
+  align-self: flex-start;
+}
+
+.voice-record-btn:hover {
+  background: #ef4444;
+  color: white;
+}
+
+.voice-record-btn.recording {
+  background: #ef4444;
+  color: white;
+  animation: pulse 1.5s infinite;
+}
+
+.voice-record-btn .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.voice-content-display {
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f9fafb;
+}
+
+.voice-content-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+}
+
+.clear-voice-btn {
+  padding: 4px 8px;
+  border: 1px solid #ef4444;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #ef4444;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.clear-voice-btn:hover {
+  background: #ef4444;
+  color: white;
+}
+
+.voice-content-text {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #1f2937;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.recording-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #ef4444;
+  font-weight: 500;
+  font-size: 14px;
+  align-self: flex-start;
+}
+
+.wave-animation {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #ef4444;
+  border-radius: 50%;
+  animation: wave 1s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+@keyframes wave {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
   }
 }
 

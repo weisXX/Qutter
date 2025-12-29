@@ -376,8 +376,9 @@ const processedBlocks = computed(() => {
   let inChartBlock = false
   let inFunctionPlotBlock = false
   let chartContent = ''
-  
+
   for (let i = 0; i < lines.length; i++) {
+    // debugger
     const line = lines[i].trim()
     
     // 检测 Mermaid 代码块
@@ -467,6 +468,7 @@ const processedBlocks = computed(() => {
     
     // 检测函数绘制代码块
     if (line === '```function' || line === '```plot' || line === '```function-plot') {
+      // debugger
       // 保存之前的 Markdown 内容
       if (currentMarkdownLines.length > 0) {
         const markdownContent = currentMarkdownLines.join('\n')
@@ -482,6 +484,7 @@ const processedBlocks = computed(() => {
     }
     
     if (line === '```' && inFunctionPlotBlock) {
+      // debugger
       inFunctionPlotBlock = false
       try {
         const plotConfig = parseFunctionPlotConfig(chartContent.trim())
@@ -635,6 +638,7 @@ const parseChartConfig = (configText: string) => {
 
 // 解析函数绘制配置
 const parseFunctionPlotConfig = (configText: string) => {
+  // debugger
   try {
     // 尝试解析 JSON 配置
     const config = JSON.parse(configText)

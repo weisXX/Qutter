@@ -9,6 +9,8 @@ const { upload, FileProcessor } = require('./services/fileProcessor');
 const { PromptManager } = require('./promptManager');
 const { LangchainService } = require('./services/langchainService');
 const functionPlotService = require('./services/functionPlotService');
+// const smartFunctionPlotService = require('./services/smartFunctionPlotService');
+const frontendFunctionPlotService = require('./services/frontendFunctionPlotService');
 // 初始化提示词管理器
 const promptManager = new PromptManager();
 promptManager.loadTemplate();
@@ -821,7 +823,36 @@ app.get('/api/api-provider/available', async (req, res) => {
 });
 
 // 函数图像生成API
-app.use('/api', functionPlotService);
+app.use('/api/function-plot', functionPlotService);
+// app.use('/api/smart-function-plot', smartFunctionPlotService);
+
+// 前端函数绘图API
+app.post('/api/frontend-function-plot', async (req, res) => {
+  try {
+    const { input, useLLM } = req.body;
+    // const input = expression;
+    console.log('前端函数绘图请求:', req.body);
+    if (!input) {
+      return res.status(400).json({
+        success: false,
+        error: '缺少输入参数',
+        suggestion: '请提供要绘制的函数或描述'
+      });
+    }
+    
+    const serviceOptions = { useLLM: useLLM || false };
+    const result = await frontendFunctionPlotService.frontendFunctionPlot(input, serviceOptions);
+    console.log('前端函数绘图结果:', result);
+    res.json(result);
+  } catch (error) {
+    console.error('前端函数绘图错误:', error);
+    res.status(500).json({
+      success: false,
+      error: '服务器内部错误',
+      message: error.message
+    });
+  }
+});
 
 // 停止流式请求的API端点
 app.post('/api/stop-request', (req, res) => {

@@ -102,9 +102,9 @@ onMounted(() => {
 }
 
 .plot-container {
-  border: 1px solid #e1e5e9;
+  /* border: 1px solid #e1e5e9;
   border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); */
   background: white;
   overflow: hidden;
 }
